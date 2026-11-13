@@ -49,6 +49,8 @@ export interface Action {
   offerMeter: boolean;
   /** Player agrees to the driver's current asking price. */
   acceptAsk: boolean;
+  /** Player only wants to know the price: nothing is booked or paid. */
+  priceCheck: boolean;
   items: ItemId[];
   minutes: number | null;
   who: CallTarget | null;

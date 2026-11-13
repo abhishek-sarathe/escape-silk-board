@@ -130,6 +130,32 @@ describe("haggling", () => {
     expect(state.cash).toBe(500);
   });
 
+  it("a ₹1 offer doesn't make the driver show his lowest price", () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const asked = resolveTurn(newGame(seed), act({ kind: "hire", transport: "auto", destination: "mg_road" })).state;
+      const lowball = resolveTurn(asked, act({ kind: "hire", transport: "auto", destination: "mg_road", offer: 1 })).state;
+      if (lowball.quote) expect(lowball.quote.ask, `seed ${seed}`).toBeGreaterThan(asked.quote!.floor);
+    }
+  });
+
+  it("when no haggle can work, the driver says so and points to the bus", () => {
+    const far = resolveTurn(newGame(23), act({ kind: "hire", transport: "auto", destination: "airport" }));
+    expect(far.outcome.facts.join(" ")).toMatch(/more than you're carrying.*Airport bus/);
+    const near = resolveTurn(newGame(23), act({ kind: "hire", transport: "auto", destination: "hsr" }));
+    expect(near.outcome.facts.join(" ")).not.toMatch(/more than you're carrying/);
+  });
+
+  it("checking a price books nothing and costs no money", () => {
+    for (const transport of ["bike_taxi", "cab", "bus"] as const) {
+      const { state, outcome } = resolveTurn(newGame(24), act({ kind: "hire", transport, destination: "hsr", priceCheck: true }));
+      expect(state, transport).toMatchObject({ cash: 500, ride: null, location: "silk_board" });
+      expect(outcome.facts.join(" "), transport).toMatch(/₹\d+/);
+    }
+    const auto = resolveTurn(newGame(24), act({ kind: "hire", transport: "auto", destination: "hsr", priceCheck: true, acceptAsk: true }));
+    expect(auto.state).toMatchObject({ cash: 500, ride: null });
+    expect(auto.state.quote).not.toBeNull();
+  });
+
   it("the driver's floor price never reaches the browser", () => {
     const { state } = resolveTurn(newGame(22), act({ kind: "hire", transport: "auto", destination: "hebbal" }));
     expect(state.quote?.floor).toBeGreaterThan(0);

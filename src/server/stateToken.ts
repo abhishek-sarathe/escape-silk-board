@@ -9,6 +9,10 @@ let warned = false;
 function key(): Buffer {
   let secret = process.env.STATE_SECRET?.trim();
   if (!secret) {
+    // The development secret is public in the repo: with it anyone could forge a game state.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("STATE_SECRET is not set. Set it to a long random string before deploying.");
+    }
     if (!warned) console.warn("[state] STATE_SECRET is not set; using an insecure development secret.");
     warned = true;
     secret = "escape-silk-board-dev-secret";

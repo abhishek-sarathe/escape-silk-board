@@ -6,6 +6,7 @@ import { between, rngFor, type Rng } from "./rng";
 import {
   AUTO_ASK,
   AUTO_FLOOR,
+  AUTO_MAX_DROP,
   AUTO_PATIENCE,
   BATTERY,
   CHARGE_MINUTES,
@@ -176,6 +177,18 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
     ctx.actionMinutes += 1;
     return;
   }
+  if (a.priceCheck) {
+    // Looking is free: nothing is booked or paid, it just costs a minute (and a little battery on an app).
+    const quoted = fixedFare(s.seed, transport, s.location, dest)!;
+    if (spec.needsPhone) ctx.phoneCost += 1;
+    ctx.actionMinutes += 1;
+    ctx.facts.push(
+      spec.needsPhone
+        ? `The app shows a ${spec.label} to ${short(dest)} for ₹${quoted}, about ${spec.wait} minutes away. Nothing is booked yet.`
+        : `The airport bus to ${short(dest)} costs ₹${quoted}. The next one is about ${spec.wait} minutes away. You haven't boarded.`,
+    );
+    return;
+  }
   if (spec.needsPhone) ctx.phoneCost += BATTERY.appBooking;
   if (transport === "bike_taxi" && s.raining && rng() < 0.5) {
     ctx.refused.push("It's raining. Every bike taxi rider nearby cancels on you.");
@@ -211,12 +224,19 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
       `An auto driver agrees to consider ${short(dest)}. He wants ₹${quote.ask} and will not use the meter (it would show about ₹${meter}).`,
     );
     ctx.actionMinutes += TRANSPORT.auto.wait;
+    // If no haggle can ever work, the driver says so, without naming his lowest price.
+    const bagValue = s.inventory.reduce((sum, i) => sum + ITEMS[i].dealValue, 0);
+    if (quote.floor > s.cash + bagValue) {
+      ctx.facts.push(
+        `He glances at your wallet and shakes his head: that is far more than you're carrying, however you bargain. "Go part of the way some other way, sir. Hebbal side. Airport bus comes there."`,
+      );
+    }
   } else {
     ctx.actionMinutes += 2;
   }
   s.quote = quote;
 
-  const rawOffer = a.acceptAsk ? quote.ask : a.offerMeter ? meter : a.offer;
+  const rawOffer = a.priceCheck ? null : a.acceptAsk ? quote.ask : a.offerMeter ? meter : a.offer;
   if (rawOffer === null) return; // just asking the price
   const cashOffer = Math.max(0, Math.round(rawOffer));
 
@@ -255,7 +275,11 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
     s.quote = null;
     return;
   }
-  quote.ask = Math.min(quote.ask, Math.max(quote.floor, round10((quote.ask + cashOffer + itemValue) / 2)));
+  // He meets you halfway, but never drops more than AUTO_MAX_DROP in one round:
+  // a silly ₹1 offer can't make him show his lowest price.
+  const halfway = round10((quote.ask + cashOffer + itemValue) / 2);
+  const smallestStep = round10(quote.ask * (1 - AUTO_MAX_DROP));
+  quote.ask = Math.min(quote.ask, Math.max(quote.floor, halfway, smallestStep));
   ctx.facts.push(`The driver refuses ${describeOffer} and comes down to ₹${quote.ask}.`);
 }
 

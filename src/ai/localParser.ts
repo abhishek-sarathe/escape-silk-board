@@ -19,6 +19,7 @@ export function blankAction(note = ""): Action {
     offer: null,
     offerMeter: false,
     acceptAsk: false,
+    priceCheck: false,
     items: [],
     minutes: null,
     who: null,
@@ -83,6 +84,7 @@ export function parseLocally(state: GameState, input: string): Action {
       offer: Number.isFinite(amount) ? amount : null,
       offerMeter: has(/\bmeter\b/),
       acceptAsk: agrees && !Number.isFinite(amount),
+      priceCheck: has(/\b(check|how much|prices?|fares?|cost|kitna)\b/) && !has(/\b(book|take|hire|get in)\b/),
       items,
     };
   }

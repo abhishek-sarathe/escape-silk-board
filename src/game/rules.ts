@@ -37,6 +37,8 @@ export const TRANSPORT: Record<Transport, TransportSpec> = {
 export const AUTO_ASK: [number, number] = [1.5, 1.9];
 export const AUTO_FLOOR: [number, number] = [1.05, 1.25];
 export const AUTO_PATIENCE: [number, number] = [2, 3];
+/** The most a driver cuts his asking price after one refused offer (12%). */
+export const AUTO_MAX_DROP = 0.12;
 
 export const WALK_MIN_PER_KM = 12;
 /** Longer stretches are refused: no stretch over this can be walked in time to make the flight. */

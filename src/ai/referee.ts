@@ -18,6 +18,7 @@ const RawAction = z.object({
   offer: numberish,
   offer_meter: z.boolean().catch(false),
   accept_ask: z.boolean().catch(false),
+  price_check: z.boolean().catch(false),
   items: z.array(z.string()).catch([]),
   minutes: numberish,
   who: z.enum(["friend", "family", "airline", "other"]).nullable().catch(null),
@@ -43,6 +44,7 @@ export function normalise(raw: z.infer<typeof RawAction>): Action {
     offer: raw.offer === null ? null : Math.min(100_000, Math.max(0, Math.round(raw.offer))),
     offerMeter: raw.offer_meter,
     acceptAsk: raw.accept_ask,
+    priceCheck: raw.price_check,
     items: [...new Set(raw.items.map((i) => i.trim().toLowerCase()).filter(isItem))],
     minutes: raw.minutes === null ? null : Math.min(60, Math.max(1, Math.round(raw.minutes))),
     who: raw.who,
@@ -53,12 +55,13 @@ export function normalise(raw: z.infer<typeof RawAction>): Action {
 const SYSTEM = `You parse player messages for a text adventure set in Bengaluru evening traffic. Convert the message into ONE JSON action. You never decide outcomes, prices or times: the game engine does.
 
 Return a JSON object with exactly these keys:
-{"kind": string, "transport": string|null, "destination": string|null, "offer": number|null, "offer_meter": boolean, "accept_ask": boolean, "items": string[], "minutes": number|null, "who": string|null, "note": string}
+{"kind": string, "transport": string|null, "destination": string|null, "offer": number|null, "offer_meter": boolean, "accept_ask": boolean, "price_check": boolean, "items": string[], "minutes": number|null, "who": string|null, "note": string}
 
 kind, pick one:
 - "hire": look for, haggle with, or book a vehicle; also any reply to a driver's price. transport: "auto" (auto, rickshaw, bhaiya, anna), "cab" (Uber, Ola, taxi, cab app), "bike_taxi" (Rapido, bike), "bus" (BMTC, Vayu Vajra, airport bus). Answering the auto driver means transport "auto".
   destination: place id where the vehicle should go; if replying to the driver's quote, the quote's destination; default "airport".
   offer: rupees offered (number) else null. offer_meter: true if asking for meter fare. accept_ask: true if accepting the driver's current price. items: bag items added to the deal.
+  price_check: true if they only want to see or ask the price ("check prices", "how much is a cab?") without booking or getting in yet; false when they book, take or hire it.
 - "walk": go on foot; destination = where they're heading.
 - "continue": keep riding, tell the driver to keep going or hurry.
 - "leave_ride": get out of the vehicle.
