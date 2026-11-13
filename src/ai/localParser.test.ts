@@ -8,7 +8,12 @@ describe("keyword fallback parser", () => {
   it.each([
     ["bhaiya, airport chaloge? meter se.", { kind: "hire", transport: "auto", destination: "airport", offerMeter: true }],
     ["book a rapido to hebbal", { kind: "hire", transport: "bike_taxi", destination: "hebbal" }],
-    ["take the vayu vajra bus", { kind: "hire", transport: "bus", priceCheck: false }],
+    ["take the vayu vajra bus", { kind: "hire", transport: "airport_bus", priceCheck: false }],
+    ["take the normal bus to hebbal", { kind: "hire", transport: "bus", destination: "hebbal", line: null }],
+    ["get on the AC bus", { kind: "hire", transport: "ac_bus" }],
+    ["take 500-D", { kind: "hire", transport: "bus", line: "500-D", destination: null }],
+    ["kia 8 to the airport", { kind: "hire", transport: "airport_bus", line: "KIA-8", destination: "airport" }],
+    ["v500d to hebbal", { kind: "hire", transport: "ac_bus", line: "V-500D", destination: "hebbal" }],
     ["Check bike taxi prices to Hebbal", { kind: "hire", transport: "bike_taxi", destination: "hebbal", priceCheck: true }],
     ["I call my friend who knows a shortcut", { kind: "call", who: "friend" }],
     ["charge my phone for 15 minutes", { kind: "charge", minutes: 15 }],

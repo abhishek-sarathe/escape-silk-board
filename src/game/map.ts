@@ -1,3 +1,4 @@
+import { AIRPORT_TOLL, TOLL_PAYERS, TRAFFIC } from "./rules";
 import type { LocationId, Transport } from "./types";
 import { LOCATION_IDS } from "./types";
 
@@ -64,7 +65,7 @@ export const PLACES: Record<LocationId, Place> = {
     short: "KR Puram",
     shops: true,
     priceMultiplier: 1,
-    aliases: ["kr puram", "tin factory", "hennur"],
+    aliases: ["kr puram", "tin factory", "kr puram bridge"],
     blurb: "Where buses go to reflect on their choices.",
   },
   hebbal: {
@@ -85,6 +86,24 @@ export const PLACES: Record<LocationId, Place> = {
     aliases: ["yelahanka", "airport road", "bellary road", "nh44", "trumpet"],
     blurb: "Six lanes and, suddenly, speed.",
   },
+  hennur: {
+    id: "hennur",
+    name: "Hennur Cross (Outer Ring Road)",
+    short: "Hennur",
+    shops: true,
+    priceMultiplier: 1,
+    aliases: ["hennur", "kalyan nagar", "hrbr", "banaswadi", "nagawara", "bagalur", "kothanur", "hennur bagalur road"],
+    blurb: "Where the Hennur-Bagalur road leaves the Ring Road for the airport.",
+  },
+  hoskote: {
+    id: "hoskote",
+    name: "Hoskote (Old Madras Road)",
+    short: "Hoskote",
+    shops: true,
+    priceMultiplier: 1,
+    aliases: ["hoskote", "old madras road", "budigere", "nh75", "nh 75"],
+    blurb: "Out past the city on Old Madras Road. The back way to the airport, with no toll.",
+  },
   airport: {
     id: "airport",
     name: "Kempegowda Airport, Departures",
@@ -96,30 +115,65 @@ export const PLACES: Record<LocationId, Place> = {
   },
 };
 
-export interface Edge {
+export type Zone = keyof typeof TRAFFIC;
+
+interface Road {
   a: LocationId;
   b: LocationId;
+  /** Real road distance (OpenStreetMap routing between the two places). */
   km: number;
-  /** Minutes by road at 7 PM, before transport speed / rain. */
-  minutes: number;
-  /** Airport buses run on this stretch. */
-  bus: boolean;
+  /** Real empty-road driving minutes (same source). */
+  free: number;
+  /** How badly 7 PM traffic hits this stretch; see TRAFFIC in rules.ts. */
+  zone: Zone;
+  /** Toll on this stretch for TOLL_PAYERS, in rupees. */
+  toll?: number;
 }
 
-// Two ways north: the Outer Ring Road (longer, has airport buses) and through the
-// centre (shorter, no airport bus until MG Road). Both meet at Hebbal.
-export const EDGES: Edge[] = [
-  { a: "silk_board", b: "hsr", km: 3, minutes: 12, bus: true },
-  { a: "silk_board", b: "koramangala", km: 4, minutes: 15, bus: false },
-  { a: "hsr", b: "koramangala", km: 3, minutes: 10, bus: false },
-  { a: "hsr", b: "marathahalli", km: 9, minutes: 22, bus: true },
-  { a: "koramangala", b: "mg_road", km: 7, minutes: 20, bus: false },
-  { a: "marathahalli", b: "kr_puram", km: 8, minutes: 16, bus: true },
-  { a: "kr_puram", b: "hebbal", km: 11, minutes: 18, bus: true },
-  { a: "mg_road", b: "hebbal", km: 9, minutes: 20, bus: true },
-  { a: "hebbal", b: "yelahanka", km: 10, minutes: 12, bus: true },
-  { a: "yelahanka", b: "airport", km: 18, minutes: 15, bus: true },
+export interface Edge extends Road {
+  /** Minutes by road at 7 PM, before transport speed / rain. */
+  readonly minutes: number;
+}
+
+// Three ways north, all real roads:
+//  - the Outer Ring Road: HSR, Marathahalli, KR Puram, then Hennur and Hebbal (KIA-8 runs it);
+//  - through the centre: Koramangala, MG Road, then Hebbal or Hennur (KIA-7A comes this way);
+//  - out east: KR Puram, Old Madras Road to Hoskote, then SH-104A to the airport, toll-free.
+// From Hebbal the NH-44 runs via Yelahanka (tolled); from Hennur the Hennur-Bagalur road goes straight up.
+// km and free minutes are OpenStreetMap routing (OSRM) between the places. Which buses run where,
+// and for how much, is real BMTC data: see buses.ts.
+const ROADS: Road[] = [
+  { a: "silk_board", b: "hsr", km: 3.6, free: 6, zone: "city" },
+  { a: "silk_board", b: "koramangala", km: 4.1, free: 7, zone: "city" },
+  { a: "hsr", b: "koramangala", km: 3.7, free: 4, zone: "city" },
+  { a: "hsr", b: "marathahalli", km: 7.8, free: 11, zone: "city" },
+  { a: "koramangala", b: "mg_road", km: 6.7, free: 9, zone: "city" },
+  { a: "marathahalli", b: "kr_puram", km: 9.4, free: 13, zone: "city" },
+  { a: "kr_puram", b: "hennur", km: 6.6, free: 10, zone: "city" },
+  { a: "hennur", b: "hebbal", km: 7.0, free: 11, zone: "city" },
+  { a: "mg_road", b: "hebbal", km: 12.8, free: 16, zone: "city" },
+  { a: "mg_road", b: "hennur", km: 7.9, free: 10, zone: "city" },
+  { a: "hebbal", b: "yelahanka", km: 9.6, free: 12, zone: "highway" },
+  { a: "yelahanka", b: "airport", km: 20.3, free: 21, zone: "highway", toll: AIRPORT_TOLL },
+  { a: "hennur", b: "airport", km: 26.0, free: 26, zone: "arterial" },
+  { a: "kr_puram", b: "hoskote", km: 18.5, free: 16, zone: "arterial" },
+  { a: "hoskote", b: "airport", km: 33.2, free: 32, zone: "highway" },
 ];
+
+export const EDGES: Edge[] = ROADS.map((r) => ({
+  ...r,
+  get minutes() {
+    return Math.max(1, Math.round(r.free * TRAFFIC[r.zone]));
+  },
+}));
+
+/** Toll this transport pays along a path (cabs and autos on the NH-44 stretch). */
+export function tollOn(path: LocationId[], transport: Mode): number {
+  if (!(TOLL_PAYERS as readonly string[]).includes(transport)) return 0;
+  let toll = 0;
+  for (let i = 1; i < path.length; i++) toll += edgeBetween(path[i - 1], path[i])?.toll ?? 0;
+  return toll;
+}
 
 export type Mode = Transport | "walk";
 
@@ -128,7 +182,8 @@ export function edgeBetween(a: LocationId, b: LocationId): Edge | undefined {
 }
 
 export function neighbors(id: LocationId, mode: Mode = "walk"): LocationId[] {
-  return EDGES.filter((e) => (e.a === id || e.b === id) && (mode !== "bus" || e.bus)).map((e) =>
+  void mode; // every stretch has a road; which buses run it is decided per line in buses.ts
+  return EDGES.filter((e) => e.a === id || e.b === id).map((e) =>
     e.a === id ? e.b : e.a,
   );
 }
@@ -166,7 +221,7 @@ export function route(from: LocationId, to: LocationId, mode: Mode): LocationId[
 export function pathKm(path: LocationId[]): number {
   let km = 0;
   for (let i = 1; i < path.length; i++) km += edgeBetween(path[i - 1], path[i])!.km;
-  return km;
+  return Math.round(km * 10) / 10; // no 29.900000000000002 km in the story
 }
 
 export function kmToAirport(id: LocationId): number {

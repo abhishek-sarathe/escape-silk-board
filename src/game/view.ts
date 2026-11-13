@@ -6,10 +6,11 @@ export interface PublicQuote {
   ask: number;
 }
 
-export type PublicState = Omit<GameState, "quote" | "history"> & { quote: PublicQuote | null };
+export type PublicState = Omit<GameState, "quote" | "history" | "notes"> & { quote: PublicQuote | null };
 
 export function toPublic(s: GameState): PublicState {
-  const { quote, history, ...rest } = s;
+  const { quote, history, notes, ...rest } = s;
   void history;
+  void notes;
   return { ...rest, quote: quote ? { destination: quote.destination, ask: quote.ask } : null };
 }

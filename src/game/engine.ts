@@ -1,7 +1,9 @@
 // The rules of the city. Pure functions: (state, action) -> (new state, what happened).
 // The LLM only ever proposes an Action; every number below is decided here.
 import { formatClock } from "./clock";
-import { PLACES, edgeBetween, kmToAirport, pathKm, route } from "./map";
+import { busLink, busOptions, busSpeed, isBus, lineFrom, type BusLine, type BusType, type LineStop } from "./buses";
+import { ENCOUNTERS, FRIEND, findEncounter, type Kit } from "./encounters";
+import { PLACES, edgeBetween, kmToAirport, pathKm, route, tollOn } from "./map";
 import { between, rngFor, type Rng } from "./rng";
 import {
   AUTO_ASK,
@@ -9,16 +11,21 @@ import {
   AUTO_MAX_DROP,
   AUTO_PATIENCE,
   BATTERY,
+  BUS_LANE,
   CHARGE_MINUTES,
   CHARGING_FEE,
   CHECKIN_CLOSES,
   CHECKIN_MINUTES,
   EVENT_CHANCE,
+  FINAL_CALL_AT,
+  FINAL_EVENT_CHANCE,
+  FINAL_STRETCH,
   ITEMS,
   MAX_EVENTS,
   MAX_INVENTORY,
   MAX_WALK_KM,
   NO_PHONE_CHECKIN_PENALTY,
+  SAMOSA_FARE_COVER,
   RAIN,
   START,
   TRANSPORT,
@@ -62,6 +69,8 @@ interface Ctx {
   phoneCost: number;
   batteryGain: number;
   checkIn: boolean;
+  /** A ride started this turn already moved its first stretch. */
+  justBoarded: boolean;
 }
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -82,9 +91,10 @@ export function surge(seed: number, transport: Transport): number {
 }
 
 export function fixedFare(seed: number, transport: Transport, from: LocationId, to: LocationId): number | null {
+  if (isBus(transport)) return busLink(from, to, transport)?.fare ?? null; // real BMTC fare
   const path = route(from, to, transport);
   if (!path) return null;
-  return Math.round(meterFare(transport, pathKm(path)) * surge(seed, transport));
+  return Math.round(meterFare(transport, pathKm(path)) * surge(seed, transport)) + tollOn(path, transport);
 }
 
 function pay(s: GameState, amount: number) {
@@ -106,7 +116,8 @@ function moveTo(s: GameState, to: LocationId) {
 /** Move the current ride one stretch along its route. Returns minutes taken. */
 function advanceRide(s: GameState, ctx: Ctx): number {
   const ride = s.ride!;
-  const path = route(s.location, ride.destination, ride.transport);
+  // A bus follows its real line; everything else takes the quickest road.
+  const path = ride.path ?? route(s.location, ride.destination, ride.transport);
   if (!path || path.length < 2) {
     s.ride = null;
     return 0;
@@ -114,9 +125,12 @@ function advanceRide(s: GameState, ctx: Ctx): number {
   const from = s.location;
   const next = path[1];
   const edge = edgeBetween(from, next)!;
-  let minutes = edge.minutes * TRANSPORT[ride.transport].speed;
+  let minutes = edge.minutes * (isBus(ride.transport) ? busSpeed(ride.transport) : TRANSPORT[ride.transport].speed);
+  const busLane = isBus(ride.transport) && BUS_LANE.roads.some(([x, y]) => (x === from && y === next) || (x === next && y === from));
+  if (busLane) minutes *= BUS_LANE.factor;
   if (s.raining) minutes *= ride.transport === "bike_taxi" ? RAIN.bike : RAIN.road;
-  if (s.pendingDelay) ctx.facts.push(`${capitalise(s.pendingDelayReason ?? "a hold-up")} costs you ${s.pendingDelay} extra minutes.`);
+  if (s.pendingDelay > 0) ctx.facts.push(`${capitalise(s.pendingDelayReason ?? "a hold-up")} costs you ${s.pendingDelay} extra minutes.`);
+  if (s.pendingDelay < 0) ctx.facts.push(`${capitalise(s.pendingDelayReason ?? "a lucky break")} saves you ${-s.pendingDelay} minutes.`);
   if (s.shortcutBonus < 0) ctx.facts.push("Your friend's shortcut actually works.");
   if (s.shortcutBonus > 0) ctx.facts.push("Your friend's shortcut turns out to be everyone's shortcut.");
   minutes = Math.max(3, Math.round(minutes + s.pendingDelay + s.shortcutBonus));
@@ -125,7 +139,10 @@ function advanceRide(s: GameState, ctx: Ctx): number {
   s.shortcutBonus = 0;
 
   moveTo(s, next);
-  ctx.facts.push(`The ${label(ride.transport)} goes from ${short(from)} to ${short(next)}${s.raining ? " in the rain" : ""}: ${minutes} minutes.`);
+  if (ride.path) ride.path = ride.path.slice(1);
+  ctx.facts.push(
+    `The ${ride.line ? `${ride.line} ` : ""}${label(ride.transport)} goes from ${short(from)} to ${short(next)}${busLane ? " in the Ring Road bus lane" : ""}${s.raining ? " in the rain" : ""}: ${minutes} minutes.`,
+  );
   if (ride.transport === "cab") {
     ctx.batteryGain += Math.round(minutes * BATTERY.cabChargePerMin);
     ctx.facts.push("Your phone charges off the cab's USB port on the way.");
@@ -137,8 +154,9 @@ function advanceRide(s: GameState, ctx: Ctx): number {
   return minutes;
 }
 
-function startRide(s: GameState, ctx: Ctx, transport: Transport, destination: LocationId, wait: number) {
-  s.ride = { transport, destination };
+function startRide(s: GameState, ctx: Ctx, transport: Transport, destination: LocationId, wait: number, bus?: BusLine) {
+  s.ride = bus ? { transport, destination, line: bus.name, path: [...bus.path] } : { transport, destination };
+  ctx.justBoarded = true;
   ctx.rideMinutes += wait + advanceRide(s, ctx);
 }
 
@@ -154,6 +172,13 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
     ctx.refused.push(`You're already in the ${label(s.ride.transport)}. Get out first if you want to switch.`);
     return;
   }
+  if (a.transport === "lift") {
+    ctx.refused.push("Nobody is offering you a lift right now. You can't book a stranger's kindness.");
+    ctx.actionMinutes += 2;
+    return;
+  }
+  // Naming a route number ("500-D", "KIA-8") is asking for a bus, whatever the word for it was.
+  if (a.line || isBus(a.transport)) return busHire(s, a, ctx);
   const transport = a.transport ?? "auto";
   const spec = TRANSPORT[transport];
   const dest = a.destination ?? "airport";
@@ -162,14 +187,7 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
     ctx.actionMinutes += 1;
     return;
   }
-  const path = route(s.location, dest, transport);
-  if (!path) {
-    ctx.refused.push(
-      `No airport bus stops at ${short(s.location)}. They run along the Outer Ring Road (HSR, Marathahalli, KR Puram), from MG Road, and up through Hebbal.`,
-    );
-    ctx.actionMinutes += 3;
-    return;
-  }
+  const path = route(s.location, dest, transport)!;
   if (transport === "auto") return haggle(s, a, ctx, rng, dest, path);
 
   if (spec.needsPhone && s.battery <= 0) {
@@ -182,11 +200,7 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
     const quoted = fixedFare(s.seed, transport, s.location, dest)!;
     if (spec.needsPhone) ctx.phoneCost += 1;
     ctx.actionMinutes += 1;
-    ctx.facts.push(
-      spec.needsPhone
-        ? `The app shows a ${spec.label} to ${short(dest)} for ₹${quoted}, about ${spec.wait} minutes away. Nothing is booked yet.`
-        : `The airport bus to ${short(dest)} costs ₹${quoted}. The next one is about ${spec.wait} minutes away. You haven't boarded.`,
-    );
+    ctx.facts.push(`The app shows a ${spec.label} to ${short(dest)} for ₹${quoted}, about ${spec.wait} minutes away. Nothing is booked yet.`);
     return;
   }
   if (spec.needsPhone) ctx.phoneCost += BATTERY.appBooking;
@@ -202,16 +216,88 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
     return;
   }
   pay(s, price);
-  ctx.facts.push(
-    spec.needsPhone
-      ? `You book a ${spec.label} to ${short(dest)} for ₹${price}. It is "2 minutes away" for ${spec.wait} minutes.`
-      : `You wait ${spec.wait} minutes and board the airport bus towards ${short(dest)}. Ticket: ₹${price}.`,
-  );
+  ctx.facts.push(`You book a ${spec.label} to ${short(dest)} for ₹${price}. It is "2 minutes away" for ${spec.wait} minutes.`);
   startRide(s, ctx, transport, dest, spec.wait);
 }
 
+const describeBus = (o: LineStop) => `${o.line.name} (${label(o.type)}) to ${short(o.to)}, ₹${o.link.fare}`;
+
+/** Real BMTC buses: only lines that actually run from here to there, at their real fares. */
+function busHire(s: GameState, a: Action, ctx: Ctx) {
+  const here = s.location;
+  const hints = () => {
+    const opts = busOptions(here);
+    return opts.length ? ` From ${short(here)}: ${opts.map(describeBus).join("; ")}.` : "";
+  };
+  let type: BusType = isBus(a.transport) ? a.transport : "bus";
+  let dest = a.destination;
+  let chosen: BusLine | undefined;
+
+  if (a.line) {
+    const stops = lineFrom(here, a.line);
+    if (!stops.length) {
+      ctx.refused.push(`No ${a.line.toUpperCase()} bus stops at ${short(here)}.${hints()}`);
+      ctx.actionMinutes += 3;
+      return;
+    }
+    // No destination named: ride the line as far towards the airport as it goes.
+    const stop = dest ? stops.find((x) => x.to === dest) : stops[0];
+    if (!stop) {
+      const goes = [...new Set(stops.map((x) => short(x.to)))].join(", ");
+      ctx.refused.push(`The ${stops[0].line.name} from ${short(here)} doesn't go to ${short(dest!)}. It goes to ${goes}.`);
+      ctx.actionMinutes += 2;
+      return;
+    }
+    ({ type, to: dest, line: chosen } = stop);
+  }
+  dest ??= "airport";
+  if (dest === here) {
+    ctx.refused.push(`You're already at ${short(dest)}.`);
+    ctx.actionMinutes += 1;
+    return;
+  }
+  const link = busLink(here, dest, type);
+  if (!link) {
+    ctx.refused.push(`No ${label(type)} goes from ${short(here)} to ${short(dest)}.${hints()}`);
+    ctx.actionMinutes += 3;
+    return;
+  }
+  const line = chosen ?? link.lines[0];
+  const others = link.lines.filter((l) => l.name !== line.name).slice(0, 2).map((l) => l.name);
+  const which = `the ${line.name}${others.length ? ` (or ${others.join(", ")})` : ""}`;
+  if (a.priceCheck) {
+    ctx.actionMinutes += 1;
+    ctx.facts.push(
+      `${capitalise(which)}, a ${label(type)}, goes to ${short(dest)} for ₹${link.fare}. One comes about every ${link.wait * 2} minutes. You haven't boarded.`,
+    );
+    return;
+  }
+  const shortBy = link.fare - s.cash;
+  // A little short? The conductor accepts the samosa for the difference.
+  if (shortBy > 0 && shortBy <= SAMOSA_FARE_COVER && s.inventory.includes("samosa")) {
+    const paid = s.cash;
+    pay(s, paid);
+    removeItem(s, "samosa");
+    s.flags.push("traded:samosa");
+    ctx.facts.push(
+      `You wait ${link.wait} minutes for ${which}. The ticket to ${short(dest)} is ₹${link.fare}; you have ₹${paid}. The conductor eyes your cold samosa and accepts it for the missing ₹${shortBy}. You board with ₹0 and no samosa.`,
+    );
+    startRide(s, ctx, type, dest, link.wait, line);
+    return;
+  }
+  if (shortBy > 0) {
+    ctx.refused.push(`The ${line.name} ${label(type)} from ${short(here)} to ${short(dest)} costs ₹${link.fare}. You have ₹${s.cash}.${hints()}`);
+    ctx.actionMinutes += 2;
+    return;
+  }
+  pay(s, link.fare);
+  ctx.facts.push(`You wait ${link.wait} minutes and board ${which}, a ${label(type)} towards ${short(dest)}. Ticket: ₹${link.fare}.`);
+  startRide(s, ctx, type, dest, link.wait, line);
+}
+
 function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, path: LocationId[]) {
-  const meter = meterFare("auto", pathKm(path));
+  const toll = tollOn(path, "auto");
+  const meter = meterFare("auto", pathKm(path)) + toll;
   let quote = s.quote?.destination === dest ? s.quote : null;
   if (!quote) {
     quote = {
@@ -221,7 +307,7 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
       patience: Math.round(between(rng, ...AUTO_PATIENCE)),
     };
     ctx.facts.push(
-      `An auto driver agrees to consider ${short(dest)}. He wants ₹${quote.ask} and will not use the meter (it would show about ₹${meter}).`,
+      `An auto driver agrees to consider ${short(dest)}. He wants ₹${quote.ask} and will not use the meter (it would show about ₹${meter}${toll ? `, with the ₹${toll} NH-44 toll` : ""}).`,
     );
     ctx.actionMinutes += TRANSPORT.auto.wait;
     // If no haggle can ever work, the driver says so, without naming his lowest price.
@@ -260,7 +346,10 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
     }
     const takenItems = price < quote.floor ? offeredItems : [];
     pay(s, price);
-    takenItems.forEach((i) => removeItem(s, i));
+    takenItems.forEach((i) => {
+      removeItem(s, i);
+      s.flags.push(`traded:${i}`); // remembered for the ending ("samosa fate")
+    });
     ctx.facts.push(
       `Deal: ₹${price}${takenItems.length ? ` plus your ${itemList(takenItems)}` : ""}. The auto sets off for ${short(dest)}.`,
     );
@@ -286,6 +375,13 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
 function walk(s: GameState, a: Action, ctx: Ctx) {
   const dest = a.destination ?? "airport";
   const from = s.location;
+
+  // If already at the airport, running or walking to the counter/terminal means checking in!
+  if (from === "airport" && (!a.destination || a.destination === "airport")) {
+    checkIn(s, ctx);
+    return;
+  }
+
   const next = dest === from ? null : route(from, dest, "walk")![1];
   const edge = next ? edgeBetween(from, next)! : null;
   const soaked = s.raining && !s.inventory.includes("umbrella");
@@ -413,6 +509,7 @@ function applyItem(s: GameState, a: Action, ctx: Ctx) {
       ctx.facts.push(s.raining ? "You open the umbrella. It helps." : "You open the umbrella. It isn't raining. People stare.");
     } else {
       removeItem(s, id);
+      s.flags.push(`used:${id}`);
       ctx.facts.push(`You ${a.note || `use the ${item.label}`}. The ${item.label} is gone.`);
     }
   }
@@ -441,10 +538,31 @@ interface EventSpec {
   id: string;
   text: string;
   canHappen: (s: GameState) => boolean;
-  apply: (s: GameState) => void;
+  /** May return a more specific text than `text`. */
+  apply: (s: GameState) => string | void;
 }
 
 const EVENTS: EventSpec[] = [
+  // Help, not just hurdles: the city is chaotic, but people are kind.
+  {
+    id: "lift",
+    text: "A stranger offers you a lift.",
+    canHappen: (s) => !s.ride && !s.quote && s.location !== "airport",
+    apply: (s) => {
+      const next = route(s.location, "airport", "auto")![1];
+      s.ride = { transport: "lift", destination: next, path: [s.location, next] };
+      return `A techie in a hatchback, also late for something, pulls over and offers you a free lift to ${short(next)}. You get in.`;
+    },
+  },
+  {
+    id: "green_wave",
+    text: "A traffic constable spots your trolley bag and waves your lane through three signals in a row. Your next stretch by road will be 8 minutes faster.",
+    canHappen: (s) => s.ride !== null && s.pendingDelay === 0,
+    apply: (s) => {
+      s.pendingDelay -= 8;
+      s.pendingDelayReason = "the constable's green wave";
+    },
+  },
   {
     id: "rain",
     text: "It starts pouring. Roads slow down, bike taxis get scarce, and walking without an umbrella is miserable.",
@@ -481,17 +599,82 @@ const EVENTS: EventSpec[] = [
   },
 ];
 
-function rollEvent(s: GameState): CityEvent | null {
-  if (s.turn < 2 || s.location === "airport") return null;
-  const rng = rngFor(s.seed, s.turn, "event");
-  const seen = s.flags.filter((f) => f.startsWith("event:")).length;
-  if (seen >= MAX_EVENTS || rng() >= EVENT_CHANCE) return null;
-  const pool = EVENTS.filter((e) => !s.flags.includes(`event:${e.id}`) && e.canHappen(s));
+/**
+ * At each stop the city may throw something at you: a happening (rain, a convoy, a lift) or a
+ * decision (a breakdown, a shortcut offer, a friend's call). More likely in the final stretch.
+ * `stop` makes every stop of a long "keep going" ride its own roll.
+ */
+function rollEvent(s: GameState, stop = 0): CityEvent | null {
+  if (s.turn < 2 || s.location === "airport" || s.pending) return null;
+  const rng = rngFor(s.seed, s.turn, "event", stop);
+  const seen = s.flags.filter((f) => f.startsWith("event:") || f.startsWith("decision:")).length;
+  const chance = CHECKIN_CLOSES - s.minutes <= FINAL_STRETCH ? FINAL_EVENT_CHANCE : EVENT_CHANCE;
+  if (seen >= MAX_EVENTS || rng() >= chance) return null;
+  const pool = [
+    ...EVENTS.filter((e) => !s.flags.includes(`event:${e.id}`) && e.canHappen(s)).map((e) => ({ kind: "event" as const, e })),
+    ...ENCOUNTERS.filter((d) => !s.flags.includes(`decision:${d.id}`) && d.canHappen(s)).map((d) => ({ kind: "decision" as const, d })),
+  ];
   if (!pool.length) return null;
-  const event = pool[Math.floor(rng() * pool.length)];
-  s.flags.push(`event:${event.id}`);
-  event.apply(s);
-  return { id: event.id, text: event.text };
+  const pick = pool[Math.floor(rng() * pool.length)];
+  if (pick.kind === "event") {
+    s.flags.push(`event:${pick.e.id}`);
+    const text = pick.e.apply(s);
+    return { id: pick.e.id, text: text || pick.e.text };
+  }
+  s.flags.push(`decision:${pick.d.id}`);
+  s.pending = { id: pick.d.id, ...pick.d.offer(s) };
+  return { id: `decision:${pick.d.id}`, text: s.pending.prompt };
+}
+
+/** The friend's lift: be at the meeting place in time and they drive you to the airport. */
+function checkMeet(s: GameState, ctx: Ctx) {
+  if (!s.meet || s.status !== "playing") return;
+  if (s.minutes > s.meet.by) {
+    ctx.facts.push(`${FRIEND} texts: "Sorry machaa, couldn't wait any longer. All the best!"`);
+    s.meet = null;
+    return;
+  }
+  if (s.location !== s.meet.place) return;
+  if (s.ride) ctx.facts.push(`You get out of the ${label(s.ride.transport)} at ${short(s.location)}.`);
+  const path = route(s.location, "airport", "auto")!;
+  s.ride = { transport: "lift", destination: "airport", path };
+  s.meet = null;
+  ctx.facts.push(`${FRIEND}'s car is idling at ${short(path[0])}, hazard lights on. "Get in, get in!" You're riding to the airport for free.`);
+}
+
+/** The airline's final-call SMS, once, as the deadline gets close. */
+function finalCall(s: GameState, ctx: Ctx) {
+  const left = CHECKIN_CLOSES - s.minutes;
+  if (left > FINAL_CALL_AT || left <= 0 || s.flags.includes("final_call") || s.location === "airport") return;
+  s.flags.push("final_call");
+  if (s.battery > 0) ctx.facts.push(`SMS from the airline: "FINAL CALL. Check-in for ES 940 closes in ${left} minutes."`);
+}
+
+/** Answer (or ignore) the decision the city was waiting on. */
+function resolveDecision(s: GameState, action: Action, ctx: Ctx, rng: Rng): boolean {
+  const d = s.pending!;
+  s.pending = null;
+  // Accept the option's key, its number ("1" = first option) or its exact label: models and players use all three.
+  const pick = action.choice?.trim().toLowerCase() ?? "";
+  const chosen =
+    action.kind === "choose"
+      ? (d.options.find((o) => o.key === pick) ??
+        (/^\d+$/.test(pick) ? d.options[Number(pick) - 1] : undefined) ??
+        d.options.find((o) => o.label.toLowerCase() === pick))
+      : undefined;
+  const key = chosen?.key ?? d.fallback;
+  if (!chosen) ctx.facts.push(`You let the moment pass (${d.options.find((o) => o.key === d.fallback)?.label.toLowerCase()}).`);
+  const kit: Kit = {
+    rng,
+    fact: (t) => ctx.facts.push(t),
+    refuse: (t) => ctx.refused.push(t),
+    minutes: (n) => (ctx.actionMinutes += n),
+    pay: (n) => pay(s, n),
+    board: (t, dest, wait) => startRide(s, ctx, t, dest, wait),
+    battery: (n) => (n < 0 ? (ctx.phoneCost -= n) : (ctx.batteryGain += n)),
+  };
+  findEncounter(d.id)?.resolve(s, key, kit);
+  return Boolean(chosen);
 }
 
 // ---------------------------------------------------------------------------
@@ -510,8 +693,23 @@ export function resolveTurn(prev: GameState, action: Action): TurnResult {
   const s: GameState = structuredClone(prev);
   s.turn += 1;
   const rng = rngFor(s.seed, s.turn, "action");
-  const ctx: Ctx = { facts: [], refused: [], actionMinutes: 0, rideMinutes: 0, phoneCost: 0, batteryGain: 0, checkIn: false };
+  const ctx: Ctx = { facts: [], refused: [], actionMinutes: 0, rideMinutes: 0, phoneCost: 0, batteryGain: 0, checkIn: false, justBoarded: false };
+
+  // A decision is waiting: this turn either answers it, or does something else and gets its fallback.
+  if (s.pending) {
+    if (resolveDecision(s, action, ctx, rng)) ctx.actionMinutes += 1;
+  } else if (action.kind === "choose") {
+    ctx.refused.push("Nobody is asking you anything right now.");
+    ctx.actionMinutes += 1;
+  }
   const wasRiding = s.ride !== null;
+
+  // At the airport the only way forward is the counter. Whatever a misread move comes back as
+  // ("other", "wait", "hire"...), it resolves as the check-in, so the player can never get stuck
+  // on the curb while the clock runs out. Shopping, charging and giving up stay their own moves.
+  if (s.location === "airport" && !s.ride && !["buy", "charge", "give_up", "check_in"].includes(action.kind)) {
+    action = { ...action, kind: "check_in" };
+  }
 
   switch (action.kind) {
     case "hire":
@@ -548,6 +746,8 @@ export function resolveTurn(prev: GameState, action: Action): TurnResult {
     case "check_in":
       checkIn(s, ctx);
       break;
+    case "choose":
+      break; // handled above
     case "wait": {
       const minutes = clamp(Math.round(action.minutes ?? 5), 2, 30);
       ctx.actionMinutes += minutes;
@@ -571,15 +771,30 @@ export function resolveTurn(prev: GameState, action: Action): TurnResult {
   }
 
   // A vehicle you're already in keeps moving, whatever else you do in it.
-  if (wasRiding && s.ride && action.kind !== "give_up") ctx.rideMinutes += advanceRide(s, ctx);
+  if (wasRiding && s.ride && !ctx.justBoarded && action.kind !== "give_up") ctx.rideMinutes += advanceRide(s, ctx);
 
   // Time only moves forward, at least a minute per turn.
-  const turnMinutes = Math.max(
+  let turnMinutes = Math.max(
     1,
     wasRiding ? Math.max(ctx.actionMinutes, ctx.rideMinutes) : ctx.actionMinutes + ctx.rideMinutes,
   );
   const startMinutes = s.minutes;
   s.minutes += turnMinutes;
+  checkMeet(s, ctx);
+  finalCall(s, ctx);
+  let event = s.status === "playing" && !ctx.checkIn ? rollEvent(s) : null;
+
+  // "Keep going" skips the boring part: ride on, stop by stop, until you arrive, something happens,
+  // the city asks you something, your friend is there, or check-in closes.
+  for (let stop = 1; action.kind === "continue" && s.ride && !event && !s.pending && s.status === "playing" && s.minutes <= CHECKIN_CLOSES; stop++) {
+    if (s.meet && s.ride.transport !== "lift" && s.location === s.meet.place) break;
+    const m = advanceRide(s, ctx);
+    turnMinutes += m;
+    s.minutes += m;
+    checkMeet(s, ctx);
+    finalCall(s, ctx);
+    event = rollEvent(s, stop);
+  }
 
   const drain = Math.floor(s.minutes / BATTERY.drainEvery) - Math.floor(startMinutes / BATTERY.drainEvery);
   const batteryBefore = prev.battery;
@@ -589,7 +804,6 @@ export function resolveTurn(prev: GameState, action: Action): TurnResult {
   else if (batteryBefore > BATTERY.lowWarning && s.battery <= BATTERY.lowWarning)
     ctx.facts.push(`Low battery warning: ${s.battery}%.`);
 
-  const event = s.status === "playing" && !ctx.checkIn ? rollEvent(s) : null;
 
   if (s.status === "playing") {
     if (ctx.checkIn) {

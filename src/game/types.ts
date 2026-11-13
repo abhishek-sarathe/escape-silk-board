@@ -9,11 +9,15 @@ export const LOCATION_IDS = [
   "kr_puram",
   "hebbal",
   "yelahanka",
+  "hennur",
+  "hoskote",
   "airport",
 ] as const;
 export type LocationId = (typeof LOCATION_IDS)[number];
 
-export const TRANSPORTS = ["auto", "cab", "bike_taxi", "bus"] as const;
+/** bus = ordinary BMTC, ac_bus = Vajra (Volvo AC), airport_bus = Vayu Vajra (KIA-x). */
+/** lift = a stranger's car; it can only be offered by a city event, never hired. */
+export const TRANSPORTS = ["auto", "cab", "bike_taxi", "bus", "ac_bus", "airport_bus", "lift"] as const;
 export type Transport = (typeof TRANSPORTS)[number];
 
 export const ITEM_IDS = ["samosa", "chai", "coffee", "water", "umbrella"] as const;
@@ -29,6 +33,7 @@ export const ACTION_KINDS = [
   "call", // phone someone
   "use_item", // eat / drink / give / use something from the bag
   "check_in", // run to the check-in counter (airport only)
+  "choose", // answer the decision the city is asking (choice = option key)
   "wait", // do nothing for a while
   "other", // possible in the world, but changes nothing
   "impossible", // cheating, superpowers, talking to the AI
@@ -43,6 +48,10 @@ export interface Action {
   kind: ActionKind;
   transport: Transport | null;
   destination: LocationId | null;
+  /** A real bus route number the player named ("500-D", "KIA-8"), if any. */
+  line: string | null;
+  /** For kind "choose": the key of the option picked. */
+  choice: string | null;
   /** Cash the player offers in a haggle. */
   offer: number | null;
   /** Player asked for "meter" fare. */
@@ -61,6 +70,9 @@ export interface Action {
 export interface Ride {
   transport: Transport;
   destination: LocationId;
+  /** Buses only: the route number boarded, and the stops it still has to pass (current stop first). */
+  line?: string;
+  path?: LocationId[];
 }
 
 /** An auto driver's standing offer. `floor` is secret: it is stripped before state reaches the browser. */
@@ -83,10 +95,14 @@ export interface Usage {
   promptTokens: number;
   completionTokens: number;
   costUsd: number;
+  /** Prompt tokens served from the provider cache (cheaper). */
+  cachedTokens?: number;
 }
 
 export interface GameState {
   version: 1;
+  /** Unique id for this playthrough (seeds repeat on replays), used to meter LLM cost per game. */
+  id?: string;
   seed: number;
   turn: number;
   /** Minutes since 7:00 PM. Only ever increases. */
@@ -108,6 +124,12 @@ export interface GameState {
   status: GameStatus;
   endReason: string | null;
   history: TurnRecord[];
+  /** A decision the city is waiting on (breakdown, shortcut offer, a friend's call...). */
+  pending?: Decision | null;
+  /** A friend waiting to give you a lift: be at `place` by game minute `by`. */
+  meet?: { place: LocationId; by: number } | null;
+  /** The Game Master agent's own short notes about this player (server-side only, never sent to the browser). */
+  notes?: string[];
   usage: Usage;
 }
 
@@ -136,4 +158,18 @@ export interface Outcome {
 export interface TurnResult {
   state: GameState;
   outcome: Outcome;
+}
+
+export interface DecisionOption {
+  key: string;
+  label: string;
+}
+
+/** A question the city is asking the player. Lives in the state until answered or ignored. */
+export interface Decision {
+  id: string;
+  prompt: string;
+  options: DecisionOption[];
+  /** What happens if the player does something else instead. */
+  fallback: string;
 }

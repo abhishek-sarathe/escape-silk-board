@@ -53,6 +53,16 @@ const PLACE_LORE: Record<LocationId, string[]> = {
     "The elevated expressway lifts over the service-road chaos toward the toll gate.",
     "Airport signboards turn up at last, green and enormous and calm.",
   ],
+  hennur: [
+    "Kalyan Nagar's cafés and dosa joints line the Ring Road, busy with people who live on this side of the city for exactly this reason.",
+    "The Hennur-Bagalur road heads north between new apartment towers and older villages the city has swallowed.",
+    "Locals swear by this way to the airport and complain about it in the same breath.",
+  ],
+  hoskote: [
+    "Old Madras Road opens up past the city: lorries, dhabas and the first dark fields.",
+    "Hoskote's market lights give way to a quieter state highway heading north.",
+    "Out here the airport's glow sits low on the horizon, further than it looks.",
+  ],
   airport: [
     "The new terminal is all bamboo and hanging gardens, a forest built for people who are late.",
     "A line of blue Vayu Vajra buses idles at the kerb, doors open.",
