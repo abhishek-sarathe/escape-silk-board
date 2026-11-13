@@ -76,6 +76,34 @@ function batteryNote(level: number): string {
   return "Apps work";
 }
 
+/** One small icon-and-value chip for the compact view. */
+function Chip({ label, children, tone = "normal", pop }: { label: string; children: React.ReactNode; tone?: "normal" | "warn" | "critical"; pop?: React.ReactNode }) {
+  const color = tone === "critical" ? "text-brake ring-brake" : tone === "warn" ? "text-sodium ring-sodium" : "text-paper ring-transparent";
+  return (
+    <span aria-label={label} className={`relative inline-flex min-w-0 items-center gap-1.5 rounded-md bg-night px-2 py-1.5 font-mono text-sm tabular-nums ring-1 ${color}`}>
+      {pop}
+      {children}
+    </span>
+  );
+}
+
+/** Remembers the compact choice in this browser only; storage can be blocked, so every access is guarded. */
+const COMPACT_KEY = "escape-silk-board:compact-card";
+function readCompact(): boolean {
+  try {
+    return window.localStorage.getItem(COMPACT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function saveCompact(on: boolean) {
+  try {
+    window.localStorage.setItem(COMPACT_KEY, on ? "1" : "0");
+  } catch {
+    // storage blocked: the choice lasts for this page only
+  }
+}
+
 function Stat({ label, children, sub, tone = "normal", pop, tint }: {
   tint: string;
   label: string;
@@ -102,6 +130,14 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
   const cash = useTween(state.cash);
   const battery = useTween(state.battery);
   const [mapOpen, setMapOpen] = useState(false);
+  // The HUD only renders after the game loads in the browser, so reading storage here can't cause a
+  // hydration mismatch.
+  const [compact, setCompact] = useState(() => typeof window !== "undefined" && readCompact());
+  const toggleCompact = () =>
+    setCompact((v) => {
+      saveCompact(!v);
+      return !v;
+    });
   const left = minutesLeft(state.minutes);
   const playing = state.status === "playing";
   const urgent = playing && left <= 15;
@@ -155,6 +191,32 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
           />
         </div>
 
+        {compact ? (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <Chip
+              label={`Phone battery ${state.battery}%. ${batteryNote(state.battery)}`}
+              tone={batteryTone}
+              pop={<Pop turn={state.turn} text={delta?.battery ? `${delta.battery > 0 ? "+" : "−"}${Math.abs(delta.battery)}%` : null} tone={delta && delta.battery > 0 ? "text-go" : "text-muted"} />}
+            >
+              <BatteryIcon level={battery} />
+              {battery}%
+            </Chip>
+            <Chip
+              label={`Money ₹${state.cash}`}
+              tone={state.cash < 50 ? "warn" : "normal"}
+              pop={<Pop turn={state.turn} text={delta?.cash ? `${delta.cash > 0 ? "+" : "−"}₹${Math.abs(delta.cash)}` : null} tone={delta && delta.cash > 0 ? "text-go" : "text-brake"} />}
+            >
+              <span aria-hidden>💵</span>₹{cash}
+            </Chip>
+            <Chip label={`Bag: ${bagSummary(state.inventory)}`}>
+              <span aria-hidden className="tracking-widest">
+                {state.inventory.length ? state.inventory.map((i) => ITEM_ICONS[i] ?? "•").join("") : "📭"}
+              </span>
+            </Chip>
+            {state.quote && <span className="font-mono text-[11px] text-muted">Auto asks ₹{state.quote.ask}</span>}
+            {state.raining && <span aria-label="Raining">🌧️</span>}
+          </div>
+        ) : (
         <div className="mt-3 grid grid-cols-[1.15fr_1fr_1.2fr] gap-2">
           <Stat
             label="Phone"
@@ -181,6 +243,7 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
             <span className="block whitespace-normal text-xs font-semibold leading-tight">{bagSummary(state.inventory)}</span>
           </Stat>
         </div>
+        )}
 
         <div className="mt-2 flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-xs text-muted">
@@ -191,6 +254,15 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
               </>
             )}
           </p>
+          <div className="flex shrink-0 gap-1.5">
+          <button
+            type="button"
+            aria-pressed={compact}
+            onClick={toggleCompact}
+            className="shrink-0 rounded-md border border-line px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-paper"
+          >
+            {compact ? "Details" : "Compact"}
+          </button>
           {/* On phones the map is one tap away; on wide screens it is always open. */}
           <button
             type="button"
@@ -200,6 +272,7 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
           >
             {mapOpen ? "Hide map" : "Map"}
           </button>
+          </div>
         </div>
         <div className={`mt-2 ${mapOpen ? "" : "max-lg:hidden"}`}>
           <BengaluruMap state={state} />
