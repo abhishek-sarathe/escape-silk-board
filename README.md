@@ -63,6 +63,16 @@ The guardrails:
 
 The agent uses its own model slot (`GROQ_AGENT_MODEL`, default `openai/gpt-oss-20b`, or `OPENROUTER_AGENT_MODEL`), so its multi-step turns get their own rate-limit budget. Every call starts with the fixed system prompt, which is marked for caching on Claude models.
 
+### Signature: the live route map
+
+The map (`src/components/BengaluruMap.tsx`) is the one thing this game is built to do well. The engine records every stretch you travel and how (`journey`), and pins every city event where it happened (`marks`). The map draws from those, so it can only show what really happened:
+
+- your route, stretch by stretch, coloured by how you travelled (auto, BMTC, Vajra, bike taxi, cab, a stranger's car, on foot), with the time you reached each place;
+- the rest of your current ride as a moving dotted line, and a marker for you that travels along the road;
+- a pin wherever the city threw something at you (rain, a jam, a convoy, a decision); tap it for what happened;
+- the real buses you can board where you stand, with fares (tap one to take it);
+- at the end, the whole evening on one map on the end card, and the route as one line in the share text.
+
 ### The city
 
 Eleven real places and three ways north: the Outer Ring Road (HSR, Marathahalli, KR Puram, then Hennur or Hebbal), through the centre (Koramangala, MG Road), and the back way out east via Hoskote. From Hebbal the NH-44 runs past Yelahanka with a ₹120 toll for cabs and autos. From Hennur the Hennur–Bagalur road goes straight up. The Hoskote road is toll-free. Autos haggle, and cabs and bike taxis need a living phone and charge surge prices. The city helps as well as hinders: a stranger may offer a lift, or a constable may wave your lane through.

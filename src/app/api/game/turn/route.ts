@@ -81,6 +81,8 @@ export async function POST(request: Request) {
   // with the keyword parser for the move and plain sentences for the story. Totals stay well under maxDuration.
   // The automatic ride only ever means "ride on", and only while riding with nothing to decide.
   const autoRide = parsed.data.auto === true && state.ride !== null && !state.pending;
+  // An automatic stop isn't something the player said; describe it so the narrator doesn't explain it back.
+  const said = autoRide ? "(says nothing; stays on board, watching the road)" : input;
   const { referee, next, outcome, narrator } = await withTurn(meter, async () => {
     const referee: GameMasterResult = autoRide
       ? { action: { ...blankAction("ride on"), kind: "continue" }, via: "auto-ride", usage: null, trace: [], lookups: [], notes: state.notes ?? [] }
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
     );
     const { state: next, outcome } = resolveTurn(state, referee.action, { oneStop: autoRide });
     next.notes = referee.notes;
-    const narrator = await withDeadline(narrate(next, input, outcome, referee.lookups), NARRATE_BUDGET_MS, () => ({
+    const narrator = await withDeadline(narrate(next, said, outcome, referee.lookups), NARRATE_BUDGET_MS, () => ({
       text: plainNarration(outcome, next),
       via: "plain (slow AI)",
       usage: null,
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
     return { referee, next, outcome, narrator };
   });
 
-  next.history = [...next.history, { input, narration: narrator.text }].slice(-HISTORY_LIMIT);
+  next.history = [...next.history, { input: said, narration: narrator.text }].slice(-HISTORY_LIMIT);
   next.usage = addUsage(next.usage, referee.usage, narrator.usage);
 
   return Response.json({

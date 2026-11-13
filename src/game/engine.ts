@@ -107,7 +107,8 @@ function removeItem(s: GameState, id: ItemId) {
   if (i >= 0) s.inventory.splice(i, 1);
 }
 
-function moveTo(s: GameState, to: LocationId) {
+function moveTo(s: GameState, to: LocationId, mode: Transport | "walk", line?: string) {
+  s.journey = [...(s.journey ?? []), { from: s.location, to, mode, ...(line ? { line } : {}) }];
   s.location = to;
   s.quote = null; // the auto driver doesn't follow you
   if (!s.visited.includes(to)) s.visited.push(to);
@@ -138,7 +139,7 @@ function advanceRide(s: GameState, ctx: Ctx): number {
   s.pendingDelayReason = null;
   s.shortcutBonus = 0;
 
-  moveTo(s, next);
+  moveTo(s, next, ride.transport, ride.line);
   if (ride.path) ride.path = ride.path.slice(1);
   ctx.facts.push(
     `The ${ride.line ? `${ride.line} ` : ""}${label(ride.transport)} goes from ${short(from)} to ${short(next)}${busLane ? " in the Ring Road bus lane" : ""}${s.raining ? " in the rain" : ""}: ${minutes} minutes.`,
@@ -402,7 +403,7 @@ function walk(s: GameState, a: Action, ctx: Ctx) {
     ctx.actionMinutes += 1;
     return;
   }
-  moveTo(s, next);
+  moveTo(s, next, "walk");
   ctx.actionMinutes += minutes;
   ctx.facts.push(`You walk ${edge.km} km from ${short(from)} to ${short(next)}${soaked ? ", getting soaked" : ""}: ${minutes} minutes.`);
 }
@@ -635,14 +636,18 @@ function rollEvent(s: GameState, stop = 0): CityEvent | null {
   ];
   if (!pool.length) return null;
   const pick = pool[Math.floor(rng() * pool.length)];
+  const pin = (e: CityEvent) => {
+    s.marks = [...(s.marks ?? []), { place: s.location, minutes: s.minutes, id: e.id, text: e.text }];
+    return e;
+  };
   if (pick.kind === "event") {
     s.flags.push(`event:${pick.e.id}`);
     const text = pick.e.apply(s);
-    return { id: pick.e.id, text: text || pick.e.text };
+    return pin({ id: pick.e.id, text: text || pick.e.text });
   }
   s.flags.push(`decision:${pick.d.id}`);
   s.pending = { id: pick.d.id, ...pick.d.offer(s) };
-  return { id: `decision:${pick.d.id}`, text: s.pending.prompt };
+  return pin({ id: `decision:${pick.d.id}`, text: s.pending.prompt });
 }
 
 /** The friend's lift: be at the meeting place in time and they drive you to the airport. */
@@ -705,6 +710,11 @@ function diffItems(before: ItemId[], after: ItemId[]): ItemId[] {
     if (i >= 0) rest.splice(i, 1);
   }
   return rest;
+}
+
+/** Give the stretches travelled since the last stamp their arrival time. */
+function stampLegs(s: GameState) {
+  if (s.journey?.some((l) => l.at === undefined)) s.journey = s.journey.map((l) => (l.at === undefined ? { ...l, at: s.minutes } : l));
 }
 
 /** `oneStop`: a "continue" moves just one stop (the automatic ride uses it, so each stop gets its own update). */
@@ -800,6 +810,7 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
   );
   const startMinutes = s.minutes;
   s.minutes += turnMinutes;
+  stampLegs(s);
   checkMeet(s, ctx);
   finalCall(s, ctx);
   let event = s.status === "playing" && !ctx.checkIn ? rollEvent(s) : null;
@@ -811,6 +822,7 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
     const m = advanceRide(s, ctx);
     turnMinutes += m;
     s.minutes += m;
+    stampLegs(s);
     checkMeet(s, ctx);
     finalCall(s, ctx);
     event = rollEvent(s, stop);

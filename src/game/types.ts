@@ -130,7 +130,29 @@ export interface GameState {
   meet?: { place: LocationId; by: number } | null;
   /** The Game Master agent's own short notes about this player (server-side only, never sent to the browser). */
   notes?: string[];
+  /** Every stretch travelled, in order, and how: the live route map draws the evening from this. */
+  journey?: JourneyLeg[];
+  /** Where the city threw something at you (rain, a hold-up, a decision), pinned on the map. */
+  marks?: MapMark[];
   usage: Usage;
+}
+
+export interface JourneyLeg {
+  from: LocationId;
+  to: LocationId;
+  mode: Transport | "walk";
+  /** Bus route number, when it was a bus. */
+  line?: string;
+  /** Game minute you reached `to`. */
+  at?: number;
+}
+
+export interface MapMark {
+  place: LocationId;
+  minutes: number;
+  /** Event or decision id, e.g. "rain", "breakdown", "decision:shortcut". */
+  id: string;
+  text: string;
 }
 
 export interface CityEvent {

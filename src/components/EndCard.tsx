@@ -3,7 +3,35 @@ import { formatClock } from "@/game/clock";
 import { PLACES } from "@/game/map";
 import { CHECKIN_CLOSES } from "@/game/rules";
 import type { PublicState } from "@/game/view";
+import { BengaluruMap } from "./BengaluruMap";
 import type { PlayerRecord } from "./record";
+
+const TRIP_ICON: Record<string, string> = {
+  walk: "🚶",
+  auto: "🛺",
+  cab: "🚕",
+  bike_taxi: "🛵",
+  bus: "🚌",
+  ac_bus: "🚌",
+  airport_bus: "🚍",
+  lift: "🚗",
+};
+
+/** The route as one shareable line: "🛵 Silk Board → Hebbal · 🚌 281-AP → Airport". */
+function tripLine(s: PublicState): string {
+  const legs = s.journey ?? [];
+  const parts: string[] = [];
+  for (let i = 0; i < legs.length; i++) {
+    const l = legs[i];
+    const prev = legs[i - 1];
+    if (prev && prev.mode === l.mode && prev.line === l.line) {
+      parts[parts.length - 1] = parts[parts.length - 1].replace(/ → [^·]+$/, ` → ${PLACES[l.to].short}`);
+    } else {
+      parts.push(`${TRIP_ICON[l.mode] ?? "•"} ${l.line ? `${l.line} ` : ""}${PLACES[l.from].short} → ${PLACES[l.to].short}`);
+    }
+  }
+  return parts.length ? parts.join(" · ") : "🚦 Never left Silk Board";
+}
 
 /** What became of the one cold samosa you started with. */
 function samosaFate(s: PublicState): string {
@@ -49,7 +77,7 @@ export default function EndCard({
       : gaveUp
         ? "😅 Silk Board broke my spirit and I went home."
         : `🚦 I missed my flight at Silk Board by ${gap} minutes!`;
-    const text = `${line} Evening #${state.seed} in Bengaluru. Can you beat the traffic? Play here: ${window.location.origin}/?seed=${state.seed}`;
+    const text = `${line}\n${tripLine(state)}\nEvening #${state.seed} in Bengaluru. Can you beat the traffic? Play here: ${window.location.origin}/?seed=${state.seed}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -85,6 +113,10 @@ export default function EndCard({
         >
           ✕
         </button>
+        {/* The ending is the map: the whole evening, every stretch and every thing that happened. */}
+        <div className="mb-3">
+          <BengaluruMap state={state} variant="ending" />
+        </div>
         {won ? <BoardingPass state={state} gap={gap} route={routeText} /> : <TrafficAward state={state} gap={gap} gaveUp={gaveUp} route={routeText} />}
 
         {record && record.played > 0 && (

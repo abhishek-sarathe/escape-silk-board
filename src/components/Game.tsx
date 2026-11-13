@@ -149,7 +149,7 @@ export default function Game() {
 
       {/* Wide screens: the situation stays on the left while the story scrolls on the right. */}
       <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col lg:grid lg:max-w-5xl lg:grid-cols-[26rem_minmax(0,1fr)]">
-      {state ? <Hud state={state} delta={delta} /> : <div />}
+      {state ? <Hud state={state} delta={delta} onMove={busy || state.status !== "playing" ? undefined : (m) => void send(m)} /> : <div />}
 
       <div className="flex min-w-0 flex-1 flex-col">
       <main className="w-full flex-1 px-4">

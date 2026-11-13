@@ -126,11 +126,10 @@ function Stat({ label, children, sub, tone = "normal", pop, tint }: {
   );
 }
 
-export default function Hud({ state, delta }: { state: PublicState; delta: Outcome["delta"] | null }) {
+export default function Hud({ state, delta, onMove }: { state: PublicState; delta: Outcome["delta"] | null; onMove?: (text: string) => void }) {
   const minutes = useTween(state.minutes);
   const cash = useTween(state.cash);
   const battery = useTween(state.battery);
-  const [mapOpen, setMapOpen] = useState(false);
   // The HUD only renders after the game loads in the browser, so reading storage here can't cause a
   // hydration mismatch.
   const [compact, setCompact] = useState(() => typeof window === "undefined" || readCompact());
@@ -152,8 +151,8 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
   return (
     <section aria-label="Your situation" className="sticky top-0 z-20 self-start px-3 pt-3 max-lg:w-full">
       <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border-2 border-line bg-panel p-3 sm:p-4">
-        {/* Phones get a shorter strip of the street (cropped from the top), so the story keeps most of the screen. */}
-        <div className="-mx-3 -mt-3 mb-3 h-28 sm:-mx-4 sm:-mt-4 sm:h-36 lg:h-auto">
+        {/* The street scene is background on wide screens; on phones the route map is the picture. */}
+        <div className="-mx-3 -mt-3 mb-3 hidden sm:-mx-4 sm:-mt-4 lg:block">
           <Scene state={state} />
         </div>
         <div className="relative flex items-end justify-between gap-4">
@@ -264,19 +263,11 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
           >
             {compact ? "Details" : "Compact"}
           </button>
-          {/* On phones the map is one tap away; on wide screens it is always open. */}
-          <button
-            type="button"
-            aria-expanded={mapOpen}
-            onClick={() => setMapOpen((v) => !v)}
-            className="shrink-0 rounded-md border border-sodium/60 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-sodium lg:hidden"
-          >
-            {mapOpen ? "Hide map" : "Map"}
-          </button>
           </div>
         </div>
-        <div className={`mt-2 ${mapOpen ? "" : "max-lg:hidden"}`}>
-          <BengaluruMap state={state} />
+        {/* The signature: always on screen. */}
+        <div className="mt-2">
+          <BengaluruMap state={state} onMove={onMove} />
         </div>
       </div>
     </section>
