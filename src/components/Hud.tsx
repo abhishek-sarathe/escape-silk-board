@@ -4,7 +4,7 @@ import { PLACES } from "@/game/map";
 import { CHECKIN_CLOSES, ITEMS, TRANSPORT } from "@/game/rules";
 import type { ItemId, Outcome } from "@/game/types";
 import type { PublicState } from "@/game/view";
-import RouteMap from "./RouteMap";
+import { BengaluruMap } from "./BengaluruMap";
 import Scene from "./Scene";
 
 /** Roll a number towards its new value instead of snapping, so every change is seen. */
@@ -29,11 +29,19 @@ function useTween(target: number): number {
   return shown;
 }
 
+const ITEM_ICONS: Record<ItemId, string> = {
+  samosa: "🫓",
+  chai: "☕",
+  coffee: "☕",
+  water: "💧",
+  umbrella: "☂️",
+};
+
 function bagSummary(items: ItemId[]): string {
-  if (!items.length) return "Empty";
+  if (!items.length) return "Empty 📭";
   const counts = new Map<ItemId, number>();
   items.forEach((i) => counts.set(i, (counts.get(i) ?? 0) + 1));
-  return [...counts].map(([id, n]) => `${n > 1 ? `${n}× ` : ""}${ITEMS[id].label}`).join(", ");
+  return [...counts].map(([id, n]) => `${n > 1 ? `${n}× ` : ""}${ITEMS[id].label} ${ITEM_ICONS[id] ?? ""}`).join(", ");
 }
 
 function Pop({ turn, text, tone }: { turn: number; text: string | null; tone: string }) {
@@ -58,7 +66,7 @@ function Stat({ label, children, sub, tone = "normal", pop, tint }: {
     <div className={`relative min-w-0 rounded-md px-3 py-2 ${tint}`}>
       {pop}
       <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{label}</div>
-      <div className={`truncate font-mono text-lg tabular-nums leading-tight ${color} ${tone === "critical" ? "animate-pulse-soft" : ""}`}>
+      <div className={`truncate font-mono text-lg tabular-nums leading-tight ${color}`}>
         {children}
       </div>
       <div className="hidden truncate text-[11px] text-muted sm:block">{sub}</div>
@@ -72,9 +80,13 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
   const battery = useTween(state.battery);
   const [mapOpen, setMapOpen] = useState(false);
   const left = minutesLeft(state.minutes);
-  const urgent = left <= 15;
-  const clockColor = urgent ? "text-brake" : left <= 30 ? "text-sodium" : "text-paper";
-  const fuse = urgent ? "bg-brake" : left <= 30 ? "bg-sodium" : "bg-go";
+  const playing = state.status === "playing";
+  const urgent = playing && left <= 15;
+  const hurry = playing && left <= 30;
+  // Auto-yellow when it's getting close, Namma Metro purple in the final stretch. Never alarm red.
+  const clockColor = urgent ? "text-metro" : hurry ? "text-sodium" : "text-paper";
+  const fuse = urgent ? "bg-metro" : hurry ? "bg-sodium" : "bg-metro-green";
+  const nudge = left <= 0 ? null : urgent ? "Machaa, hurry up! 🏃" : hurry ? "Chalo chalo! ⏱️" : null;
   const batteryTone = state.battery === 0 ? "critical" : state.battery <= 10 ? "warn" : "normal";
 
   return (
@@ -86,8 +98,20 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
         </div>
         <div className="relative flex items-end justify-between gap-4">
           <div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">Right now</div>
-            <div className={`whitespace-nowrap font-display text-4xl tabular-nums leading-none sm:text-5xl lg:text-4xl ${clockColor} ${urgent ? "animate-pulse-soft" : ""}`}>
+            <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+              Right now
+              {nudge && (
+                <span
+                  key={nudge}
+                  className={`animate-rise rounded-full px-2 py-0.5 font-sans text-[10px] font-bold normal-case tracking-normal text-night ${urgent ? "bg-metro" : "bg-sodium"}`}
+                >
+                  {nudge}
+                </span>
+              )}
+            </div>
+            <div
+              className={`inline-block origin-bottom-left whitespace-nowrap font-display text-4xl tabular-nums leading-none sm:text-5xl lg:text-4xl ${clockColor} ${urgent ? "animate-nudge" : ""}`}
+            >
               {formatClock(minutes)}
             </div>
           </div>
@@ -110,10 +134,10 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
 
         <div className="mt-3 grid grid-cols-[1fr_1fr_1.35fr] gap-2">
           <Stat
-            label="Battery"
+            label="⚡ Battery"
             tint="bg-night text-muted"
             tone={batteryTone}
-            sub={state.battery > 0 ? "Apps and calls work" : "Dead: no apps, no calls"}
+            sub={state.battery > 0 ? "UPI & apps live 🟢" : "Dead: Cash only 📵"}
             pop={<Pop turn={state.turn} text={delta?.battery ? `${delta.battery > 0 ? "+" : "−"}${Math.abs(delta.battery)}%` : null} tone={delta && delta.battery > 0 ? "text-go" : "text-muted"} />}
           >
             {battery}%
@@ -122,16 +146,16 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
             </span>
           </Stat>
           <Stat
-            label="Cash"
+            label="💵 Cash"
             tint="bg-night text-muted"
             tone={state.cash < 50 ? "warn" : "normal"}
-            sub={state.quote ? `Auto asking ₹${state.quote.ask}` : "Spend it wisely"}
+            sub={state.quote ? `Auto asks ₹${state.quote.ask}` : state.battery > 0 ? "UPI + Cash" : "Cash only"}
             pop={<Pop turn={state.turn} text={delta?.cash ? `${delta.cash > 0 ? "+" : "−"}₹${Math.abs(delta.cash)}` : null} tone={delta && delta.cash > 0 ? "text-go" : "text-brake"} />}
           >
             ₹{cash}
           </Stat>
-          <Stat label="Bag" tint="bg-night text-muted" sub={state.raining ? "It's raining" : "Dry, for now"}>
-            <span className="text-sm">{bagSummary(state.inventory)}</span>
+          <Stat label="🎒 Bag" tint="bg-night text-muted" sub={state.raining ? "🌧️ Pouring" : "🌆 Dry evening"}>
+            <span className="text-xs font-semibold leading-tight">{bagSummary(state.inventory)}</span>
           </Stat>
         </div>
 
@@ -140,7 +164,7 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
             <span className="text-paper">{PLACES[state.location].name}</span>
             {state.ride && (
               <>
-                {" · "}in a {TRANSPORT[state.ride.transport].label} to {PLACES[state.ride.destination].short}
+                {" · "}in the {state.ride.line ? `${state.ride.line} ` : ""}{TRANSPORT[state.ride.transport].label} to {PLACES[state.ride.destination].short}
               </>
             )}
           </p>
@@ -155,7 +179,7 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
           </button>
         </div>
         <div className={`mt-2 ${mapOpen ? "" : "max-lg:hidden"}`}>
-          <RouteMap state={state} />
+          <BengaluruMap state={state} />
         </div>
       </div>
     </section>

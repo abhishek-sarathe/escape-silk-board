@@ -10,6 +10,8 @@ export interface NewGameResponse {
 export interface TurnResponse extends NewGameResponse {
   outcome: Outcome;
   action: Action;
+  /** The Game Master agent's tool calls this turn ("How Anna decided"). */
+  trace: { tool: string; args: Record<string, unknown>; result: string }[];
   via: { referee: string; narrator: string };
 }
 

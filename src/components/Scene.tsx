@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { PLACES, kmToAirport } from "@/game/map";
 import { CHECKIN_CLOSES } from "@/game/rules";
+import { TRANSPORT } from "@/game/rules";
 import type { Transport } from "@/game/types";
 import type { PublicState } from "@/game/view";
 
@@ -95,7 +96,13 @@ function Bike() {
   );
 }
 
-function Bus() {
+interface BusProps {
+  /** Route number on the LED board, e.g. "500-D" or "KIA-8". */
+  line?: string;
+}
+
+/** Ordinary BMTC city bus, route number in the window. */
+function CityBus({ line = "BMTC" }: BusProps) {
   return (
     <g>
       <rect x={0} y={-46} width={128} height={38} rx={6} fill="#e23b3b" />
@@ -103,11 +110,72 @@ function Bus() {
       {[30, 54, 78, 102].map((x) => (
         <rect key={x} x={x} y={-40} width={2} height={14} fill="#e23b3b" />
       ))}
+      <rect x={104} y={-44} width={22} height={7} rx={1} fill="#0F172A" />
+      <text x={115} y={-38.6} textAnchor="middle" fontSize={5.5} fontWeight="bold" fill="#F59E0B" fontFamily="monospace">
+        {line}
+      </text>
       <rect x={0} y={-20} width={128} height={3} fill="#f4f1ea" />
       <rect x={0} y={-42} width={3} height={8} rx={1} fill="#ff5a4f" />
       <Wheel x={26} r={7} />
       <Wheel x={100} r={7} />
       <Headlight x={128} y={-16} />
+    </g>
+  );
+}
+
+/** Vajra (city AC) in deep teal; Vayu Vajra (airport) in sky blue with a ✈ on the board. */
+const VajraBus = ({ line = "V-500D" }: BusProps) => <Volvo body="#0E7490" trim="#22D3EE" board={line} gradientId="vajra-headlight" />;
+const VayuVajraBus = ({ line = "KIA-8" }: BusProps) => <Volvo body="#0284C7" trim="#38BDF8" board={`${line}✈`} gradientId="vayu-headlight" />;
+
+/** BMTC Volvo coach. Drawn at 96 wide, scaled so its wheels sit on the road. */
+function Volvo({ body, trim, board, gradientId }: { body: string; trim: string; board: string; gradientId: string }) {
+  return (
+    <g className="kia-bus-sprite" transform="translate(0 -47) scale(1.33)">
+      <defs>
+        <linearGradient id={gradientId} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor="#FEF08A" />
+          <stop offset="1" stopColor="#FEF08A" stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      {/* Headlight beam */}
+      <polygon points="96,24 165,12 165,36" fill={`url(#${gradientId})`} opacity={0.35} />
+      {/* Shadow */}
+      <ellipse cx={48} cy={34} rx={46} ry={3} fill="#000000" opacity={0.45} />
+
+      {/* Roof AC pod */}
+      <rect x={18} y={0} width={44} height={5} rx={2.5} fill="#E2E8F0" />
+      <rect x={24} y={1} width={32} height={2} rx={1} fill="#94A3B8" />
+
+      {/* Coach body, Vayu Vajra sky blue */}
+      <rect x={0} y={4} width={96} height={26} rx={5} fill={body} stroke={trim} strokeWidth={1} />
+
+      {/* White swoosh along the bottom */}
+      <path d="M 2 23 Q 45 20 95 24 L 95 28 L 2 28 Z" fill="#F8FAFC" />
+      <rect x={0} y={26} width={96} height={3} rx={1.5} fill="#0369A1" />
+
+      {/* Amber LED route board */}
+      <rect x={70} y={6} width={22} height={5} rx={1} fill="#0F172A" />
+      <text x={72} y={10} fontSize={4.2} fontWeight="bold" fill="#F59E0B" fontFamily="monospace">
+        {board}
+      </text>
+
+      {/* Tinted AC windows */}
+      <rect x={6} y={8} width={60} height={11} rx={2} fill="#0F172A" />
+      {[7, 22, 37, 52].map((x) => (
+        <rect key={x} x={x} y={9} width={13} height={9} rx={1} fill="#38BDF8" opacity={0.75} />
+      ))}
+      {/* Driver's cabin window */}
+      <path d="M 70 12 L 93 12 L 95 19 L 70 19 Z" fill="#7DD3FC" opacity={0.85} />
+
+      {/* Headlight and taillight */}
+      <circle cx={95} cy={24} r={2.2} fill="#FEF08A" />
+      <rect x={0} y={20} width={2} height={5} rx={1} fill="#EF4444" />
+
+      {/* Wheels with silver hubs */}
+      <circle cx={22} cy={30} r={5.5} fill="#0F172A" />
+      <circle cx={22} cy={30} r={2.5} fill="#CBD5E1" />
+      <circle cx={74} cy={30} r={5.5} fill="#0F172A" />
+      <circle cx={74} cy={30} r={2.5} fill="#CBD5E1" />
     </g>
   );
 }
@@ -129,7 +197,15 @@ function Walker({ umbrella }: { umbrella: boolean }) {
   );
 }
 
-const VEHICLE: Record<Transport, () => React.ReactNode> = { auto: Auto, cab: Cab, bike_taxi: Bike, bus: Bus };
+const VEHICLE: Record<Transport, (p: BusProps) => React.ReactNode> = {
+  auto: Auto,
+  cab: Cab,
+  bike_taxi: Bike,
+  bus: CityBus,
+  ac_bus: VajraBus,
+  airport_bus: VayuVajraBus,
+  lift: Cab, // a stranger's car
+};
 
 function JamCar({ x, y, color }: { x: number; y: number; color: string }) {
   return (
@@ -155,7 +231,7 @@ export default function Scene({ state }: { state: PublicState }) {
     <svg
       viewBox="0 0 480 200"
       role="img"
-      aria-label={`${place.name}${state.raining ? ", in the rain" : ""}. ${state.ride ? `You are in a ${state.ride.transport.replace("_", " ")}.` : "You are on foot in the traffic."}`}
+      aria-label={`${place.name}${state.raining ? ", in the rain" : ""}. ${state.ride ? `You are in a ${state.ride.line ? `${state.ride.line} ` : ""}${TRANSPORT[state.ride.transport].label}.` : "You are on foot in the traffic."}`}
       preserveAspectRatio="xMidYMax slice"
       className={`block h-full w-full lg:h-auto ${moving ? "scene-moving" : ""}`}
     >
@@ -275,7 +351,7 @@ export default function Scene({ state }: { state: PublicState }) {
       )}
 
       <g transform={`translate(${Vehicle ? 170 : 180} 194)`}>
-        <g className={moving ? "scene-bob" : ""}>{Vehicle ? <Vehicle /> : <Walker umbrella={state.raining && state.inventory.includes("umbrella")} />}</g>
+        <g className={moving ? "scene-bob" : ""}>{Vehicle ? <Vehicle line={state.ride?.line} /> : <Walker umbrella={state.raining && state.inventory.includes("umbrella")} />}</g>
       </g>
     </svg>
   );

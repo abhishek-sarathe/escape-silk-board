@@ -1,109 +1,231 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatClock } from "@/game/clock";
 import { PLACES } from "@/game/map";
 import { CHECKIN_CLOSES } from "@/game/rules";
 import type { PublicState } from "@/game/view";
 import type { PlayerRecord } from "./record";
 
-/** The ending as a boarding pass: stamped BOARDED if you made it, MISSED if you didn't. */
-export default function EndCard({ state, record, onNew, onReplay }: {
+/** What became of the one cold samosa you started with. */
+function samosaFate(s: PublicState): string {
+  if (s.inventory.includes("samosa")) return "Still in your bag. Cold. Undefeated. 🫓";
+  if (s.flags.includes("traded:samosa")) return "Traded to an auto anna. A legend now rides with him. 🛺";
+  if (s.flags.includes("used:samosa")) return "Eaten (or gifted). It gave its all. 🫡";
+  return "Lost to the traffic gods. 🙏";
+}
+
+/**
+ * The ending replaces the game: a Kempegowda T2 boarding pass if you made it, a Peak Bengaluru
+ * Traffic Award receipt if you didn't. The input bar is locked behind it (see Game.tsx).
+ */
+export default function EndCard({
+  state,
+  record,
+  onNew,
+  onReplay,
+  onClose,
+}: {
   state: PublicState;
   record: PlayerRecord | null;
   onNew: () => void;
   onReplay: () => void;
+  /** Hide the card to read back through the evening; Game shows a button to bring it back. */
+  onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const won = state.status === "won";
   const gap = Math.abs(CHECKIN_CLOSES - state.minutes);
   const gaveUp = !won && state.minutes <= CHECKIN_CLOSES;
-  const headline = won ? `${gap} min to spare` : gaveUp ? "You went home" : `Missed by ${gap} min`;
   const newBest = won && record?.best === gap;
-
-  const fields = [
-    ["From", "Silk Board"],
-    ["To", "BLR · ES 940"],
-    [won ? "At counter" : "Last seen", won ? formatClock(state.minutes) : PLACES[state.location].short],
-    ["Cash left", `₹${state.cash}`],
-    ["Battery", `${state.battery}%`],
-    ["Moves", String(state.turn)],
-  ];
+  const routeText = state.visited.map((id) => PLACES[id].short).join(" → ");
 
   async function share() {
     const line = won
-      ? `I made my flight with ${gap} minutes to spare.`
+      ? `🎉 I escaped Silk Board and caught flight ES 940 with ${gap} minutes to spare!`
       : gaveUp
-        ? "I gave up on my flight at Silk Board."
-        : `I missed my flight by ${gap} minutes.`;
-    const text = `${line} Escape Silk Board, evening #${state.seed}. Same city, same traffic: can you do better? ${window.location.origin}/?seed=${state.seed}`;
+        ? "😅 Silk Board broke my spirit and I went home."
+        : `🚦 I missed my flight at Silk Board by ${gap} minutes!`;
+    const text = `${line} Evening #${state.seed} in Bengaluru. Can you beat the traffic? Play here: ${window.location.origin}/?seed=${state.seed}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
     } catch {
       setCopied(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center overflow-y-auto bg-night/80 p-4 backdrop-blur-sm sm:items-center">
-      <div role="dialog" aria-labelledby="end-title" className="animate-rise w-full max-w-md">
-        <div className="relative overflow-hidden rounded-2xl bg-paper text-night shadow-2xl">
-          <div className={`px-6 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-night ${won ? "bg-go" : "bg-brake"}`}>
-            Boarding pass · Evening #{state.seed}
-          </div>
-          <div className="relative px-6 pb-5 pt-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-md sm:items-center">
+      {won && (
+        <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+          {["🎉", "✈️", "🛺", "⭐", "✨", "🎊", "☕"].map((char, i) => (
             <span
-              className={`animate-stamp absolute right-4 top-3 rounded-md border-4 px-2 py-0.5 font-display text-xl uppercase ${won ? "border-go text-go" : "border-brake text-brake"}`}
-              style={{ filter: "saturate(0.8) brightness(0.8)" }}
+              key={i}
+              className="absolute animate-bounce text-2xl opacity-75"
+              style={{ top: `${15 + ((i * 12) % 70)}%`, left: `${8 + ((i * 14) % 84)}%`, animationDuration: `${1.5 + (i % 3) * 0.5}s` }}
             >
-              {won ? "Boarded" : "Missed"}
+              {char}
             </span>
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-night/60">{won ? "You made it" : "Cause of missed flight"}</p>
-            <h2 id="end-title" className="mt-1 max-w-[70%] font-display text-3xl leading-tight">
-              {headline}
-            </h2>
-            <p className="mt-2 text-sm text-night/80">{state.endReason}</p>
-          </div>
-          {/* The tear line, with a notch punched out of each edge. */}
-          <div className="relative border-t-2 border-dashed border-night/25">
-            <span className="absolute -left-3 -top-3 h-6 w-6 rounded-full bg-night" />
-            <span className="absolute -right-3 -top-3 h-6 w-6 rounded-full bg-night" />
-          </div>
-          <dl className="grid grid-cols-3 gap-x-3 gap-y-3 px-6 py-4">
-            {fields.map(([k, v]) => (
-              <div key={k} className="min-w-0">
-                <dt className="font-mono text-[9px] uppercase tracking-[0.18em] text-night/55">{k}</dt>
-                <dd className="truncate font-mono text-sm font-semibold tabular-nums">{v}</dd>
-              </div>
-            ))}
-          </dl>
+          ))}
         </div>
+      )}
+
+      <div role="dialog" aria-modal="true" aria-labelledby="end-title" className="animate-rise relative my-auto w-full max-w-lg">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close and read back through the evening"
+          title="Close (Esc)"
+          className="absolute -top-3 -right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-panel text-lg font-bold text-paper shadow-lg ring-1 ring-white/20 transition hover:bg-line"
+        >
+          ✕
+        </button>
+        {won ? <BoardingPass state={state} gap={gap} route={routeText} /> : <TrafficAward state={state} gap={gap} gaveUp={gaveUp} route={routeText} />}
 
         {record && record.played > 0 && (
-          <p className="mt-3 text-center font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-            {newBest && <span className="text-go">New personal best · </span>}
-            Flights caught: {record.won} of {record.played}
-            {record.best !== null && ` · best ${record.best} min to spare`}
+          <p className="mt-3 text-center font-mono text-xs font-medium text-paper/90">
+            {newBest && <span className="font-bold text-metro-green">✨ New personal best! </span>}
+            Flights caught: <span className="font-bold text-sodium">{record.won}</span> of {record.played}
+            {record.best !== null && ` (best: ${record.best} min to spare)`}
           </p>
         )}
 
-        <div className="mt-3 flex flex-col gap-2">
-          {/* After a loss the same evening is the default: you know the traffic now. */}
+        <div className="mt-4 flex flex-col gap-2.5">
           <button
-            onClick={won ? onNew : onReplay}
-            className="rounded-xl bg-sodium px-4 py-3 font-semibold text-night hover:brightness-110"
+            autoFocus
+            onClick={onNew}
+            className="flex items-center justify-center gap-2 rounded-xl bg-sodium px-5 py-4 font-display text-lg text-night shadow-lg transition hover:brightness-110 active:scale-[0.98]"
           >
-            {won ? "Play a new evening" : "Try this evening again"}
+            🛺 Play Again (New Route)
           </button>
           <div className="flex gap-2">
-            <button onClick={won ? onReplay : onNew} className="flex-1 rounded-xl bg-panel px-4 py-2.5 text-sm text-paper hover:bg-line">
-              {won ? "Same evening, faster" : "New evening"}
+            <button
+              onClick={onReplay}
+              className="flex-1 rounded-xl border border-white/10 bg-panel px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-line active:scale-[0.98]"
+            >
+              {won ? "⚡ Same evening, faster" : "🔁 Retry this evening"}
             </button>
-            <button onClick={() => void share()} className="flex-1 rounded-xl bg-panel px-4 py-2.5 text-sm text-paper hover:bg-line">
-              {copied ? "Copied. Send it." : "Challenge a friend"}
+            <button
+              onClick={() => void share()}
+              className="flex-1 rounded-xl border border-sodium/50 bg-sodium/10 px-4 py-2.5 text-sm font-bold text-sodium transition hover:bg-sodium/20 active:scale-[0.98]"
+            >
+              {copied ? "✅ Copied!" : "📢 Challenge friends"}
             </button>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Field({ k, v, wide = false }: { k: string; v: string; wide?: boolean }) {
+  return (
+    <div className={`rounded-lg bg-white/80 p-2 ring-1 ring-zinc-200/70 ${wide ? "col-span-3" : ""}`}>
+      <dt className="font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{k}</dt>
+      <dd className={`mt-0.5 font-mono text-xs font-bold text-zinc-900 sm:text-sm ${wide ? "leading-snug" : "truncate"}`}>{v}</dd>
+    </div>
+  );
+}
+
+function BoardingPass({ state, gap, route }: { state: PublicState; gap: number; route: string }) {
+  return (
+    <div className="overflow-hidden rounded-3xl bg-[#faf8f5] text-night shadow-2xl ring-1 ring-black/10">
+      <div className="flex items-center justify-between bg-[#1f9d55] px-6 py-3.5 text-xs font-bold uppercase tracking-widest text-white">
+        <span>✈️ Kempegowda Intl · Terminal 2</span>
+        <span className="font-mono text-[11px] opacity-90">Evening #{state.seed}</span>
+      </div>
+
+      <div className="relative p-6 sm:p-7">
+        <div className="animate-stamp absolute right-5 top-5 rounded-xl border-4 border-emerald-600 bg-emerald-50/90 px-3 py-1 font-display text-lg uppercase text-emerald-700 select-none sm:text-xl">
+          ✓ Boarded
+        </div>
+        <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-zinc-500">🏆 Bengaluru speedrun</p>
+        <h2 id="end-title" className="mt-1 max-w-[65%] font-display text-2xl text-night sm:text-3xl">
+          {gap} min to spare!
+        </h2>
+        <p className="mt-2.5 text-sm leading-relaxed text-zinc-700 sm:text-base">
+          {state.endReason ?? "You made it through the gates before the final call!"} Machaa, you beat Silk Board. Tell everyone.
+        </p>
+      </div>
+
+      <div className="relative border-t-2 border-dashed border-zinc-300">
+        <span className="absolute -left-3.5 -top-3.5 h-7 w-7 rounded-full bg-night" />
+        <span className="absolute -right-3.5 -top-3.5 h-7 w-7 rounded-full bg-night" />
+      </div>
+
+      <dl className="grid grid-cols-3 gap-2.5 bg-zinc-50/70 p-5 sm:p-6">
+        <Field k="Flight" v="ES 940" />
+        <Field k="Check-in" v={formatClock(state.minutes)} />
+        <Field k="Seat" v="14A window" />
+        <Field k="Cash left" v={`₹${state.cash}`} />
+        <Field k="Battery" v={`${state.battery}%`} />
+        <Field k="Moves" v={`${state.turn}`} />
+        <Field k="Your route" v={`${route} ✈️`} wide />
+        <Field k="Samosa fate" v={samosaFate(state)} wide />
+      </dl>
+
+      <div className="flex items-center justify-between border-t border-zinc-200 bg-zinc-100/80 px-6 py-2.5 font-mono text-[10px] text-zinc-400">
+        <span aria-hidden className="tracking-[0.3em]">||| | ||||| || | |||| ||| |||| |</span>
+        <span>BLR-ES940-T2</span>
+      </div>
+    </div>
+  );
+}
+
+function TrafficAward({ state, gap, gaveUp, route }: { state: PublicState; gap: number; gaveUp: boolean; route: string }) {
+  const lines: [string, string][] = [
+    ["Flight ES 940", gaveUp ? "Abandoned" : `Missed by ${gap} min`],
+    ["Last seen at", PLACES[state.location].short],
+    ["Clock", formatClock(state.minutes)],
+    ["Cash left", `₹${state.cash}`],
+    ["Battery left", `${state.battery}%`],
+    ["Moves made", `${state.turn}`],
+  ];
+  return (
+    <div className="overflow-hidden rounded-2xl bg-[#fffdf5] text-night shadow-2xl">
+      <div className="hazard" aria-hidden />
+      <div className="relative px-6 pb-4 pt-5 text-center">
+        <div className="text-4xl" aria-hidden>
+          🏆
+        </div>
+        <p className="mt-1 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-500">Missed flight receipt</p>
+        <h2 id="end-title" className="mt-1 font-display text-2xl text-night sm:text-3xl">
+          Peak Bengaluru Traffic Award
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-700">
+          {state.endReason ?? "The traffic won this round."} Scene illa, machaa. Silk Board has humbled better people. It&apos;ll make a great story.
+        </p>
+        <div className="animate-stamp absolute right-4 top-4 rounded-lg border-4 border-[#7b2d8e] px-2 py-0.5 font-display text-sm uppercase text-[#7b2d8e] select-none">
+          {gaveUp ? "Went home" : "Missed"}
+        </div>
+      </div>
+
+      <div className="border-t-2 border-dashed border-zinc-300 px-6 py-4 font-mono text-xs sm:text-sm">
+        {lines.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-4 py-0.5">
+            <span className="text-zinc-500">{k}</span>
+            <span className="font-bold text-zinc-900">{v}</span>
+          </div>
+        ))}
+        <div className="mt-3 border-t border-zinc-200 pt-3">
+          <div className="text-zinc-500">Your route</div>
+          <div className="font-bold leading-snug text-zinc-900">{route}</div>
+        </div>
+        <div className="mt-3">
+          <div className="text-zinc-500">Samosa fate</div>
+          <div className="font-bold leading-snug text-zinc-900">{samosaFate(state)}</div>
+        </div>
+      </div>
+
+      <div className="border-t-2 border-dashed border-zinc-300 bg-amber-50 px-6 py-2.5 text-center font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+        Evening #{state.seed} · Thank you, visit again 🙏
+      </div>
+      <div className="hazard" aria-hidden />
     </div>
   );
 }

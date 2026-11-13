@@ -11,6 +11,47 @@ export interface Entry {
   /** Game minutes when this line happened. */
   at?: number;
   outcome?: Outcome;
+  /** The Game Master agent's tool calls for this turn. */
+  trace?: TraceStep[];
+}
+
+export interface TraceStep {
+  tool: string;
+  args: Record<string, unknown>;
+  result: string;
+}
+
+const TOOL_LABEL: Record<string, string> = {
+  look_around: "👀 looked around",
+  bus_options: "🚌 checked buses",
+  quote: "💸 got a quote",
+  take_action: "✅ committed",
+  fallback: "↩️ fell back",
+};
+
+/** The agent's working, step by step: what it looked up and the one action it committed. */
+function Trace({ steps }: { steps: TraceStep[] }) {
+  const args = (a: Record<string, unknown>) =>
+    Object.entries(a)
+      .filter(([, v]) => v !== null && v !== false && !(Array.isArray(v) && !v.length) && v !== "")
+      .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join("+") : String(v)}`)
+      .join(" ");
+  return (
+    <details className="mt-3 rounded-md bg-night/60 px-3 py-2 text-[12px] ring-1 ring-white/5">
+      <summary className="cursor-pointer select-none font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+        How Anna decided · {steps.length} step{steps.length === 1 ? "" : "s"}
+      </summary>
+      <ol className="mt-2 space-y-1.5 font-mono">
+        {steps.map((s, i) => (
+          <li key={i} className="min-w-0">
+            <span className="text-sodium">{TOOL_LABEL[s.tool] ?? s.tool}</span>
+            {args(s.args) && <span className="text-paper"> {args(s.args)}</span>}
+            {s.tool !== "take_action" && <div className="truncate text-muted">{s.result}</div>}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
 }
 
 /**
@@ -55,7 +96,9 @@ function Changes({ outcome }: { outcome: Outcome }) {
     <div className="mt-3 space-y-2">
       {outcome.event && (
         <div className="rounded-md border-2 border-sodium px-3 py-2.5">
-          <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-sodium">Meanwhile, in the city</div>
+          <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-sodium">
+            {outcome.event.id.startsWith("decision:") ? "🤔 Your call" : "Meanwhile, in the city"}
+          </div>
           <p className="mt-0.5 text-sm text-paper">{outcome.event.text}</p>
         </div>
       )}
@@ -87,36 +130,54 @@ export default function Feed({ entries, busy }: { entries: Entry[]; busy: boolea
       {entries.map((e) => {
         if (e.kind === "player") {
           return (
-            <li key={e.id} className="animate-rise flex justify-end">
-              <p className="max-w-[85%] rounded-md bg-sodium px-3.5 py-2 text-sm font-semibold text-night">{e.text}</p>
+            <li key={e.id} className="animate-rise flex flex-col items-end">
+              <div className="mb-1 flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-muted">
+                <span>YOU</span>
+                <span>💬</span>
+              </div>
+              <p className="max-w-[85%] rounded-2xl rounded-tr-xs bg-sodium px-4 py-2.5 text-sm font-bold text-night shadow-sm">
+                {e.text}
+              </p>
             </li>
           );
         }
         if (e.kind === "error") {
           return (
-            <li key={e.id} className="animate-rise text-sm text-brake">
-              {e.text}
+            <li key={e.id} className="animate-rise rounded-lg border border-brake/40 bg-brake/10 p-3 text-sm text-brake">
+              <span className="font-bold mr-1">⚠️</span> {e.text}
             </li>
           );
         }
         return (
-          <li key={e.id} className="animate-rise">
-            {e.at !== undefined && (
-              <div className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">{formatClock(e.at)}</div>
-            )}
-            <p className="text-[17px] leading-relaxed text-paper">
+          <li key={e.id} className="animate-rise rounded-xl bg-panel/40 p-4 ring-1 ring-white/5">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-sodium">
+                <span>🎙️</span>
+                <span>NARRATOR</span>
+              </span>
+              {e.at !== undefined && (
+                <span className="font-mono text-[11px] font-semibold text-muted bg-line/60 rounded px-2 py-0.5">
+                  {formatClock(e.at)}
+                </span>
+              )}
+            </div>
+            <p className="text-[16px] leading-relaxed text-paper">
               <Typed text={e.text} animate={e.id === lastId} />
             </p>
             {e.outcome && <Changes outcome={e.outcome} />}
+            {e.trace && e.trace.length > 0 && <Trace steps={e.trace} />}
           </li>
         );
       })}
       {/* Always rendered, so the feed's height doesn't jump when a reply starts or lands. */}
       <li
         aria-hidden={!busy}
-        className={`font-mono text-xs uppercase tracking-[0.18em] text-muted ${busy ? "animate-pulse-soft" : "invisible"}`}
+        className={`flex items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-sodium ${
+          busy ? "animate-pulse-soft" : "invisible"
+        }`}
       >
-        The city is thinking…
+        <span>🛺</span>
+        <span>The city is answering…</span>
       </li>
     </ol>
   );

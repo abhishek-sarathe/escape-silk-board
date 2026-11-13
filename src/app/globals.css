@@ -20,6 +20,9 @@
   --color-neon: #ff4fa3;
   --color-sky: #22d3ee;
   --color-violet: #7c5cff;
+  /* Namma Metro line colours, tuned to read on the night panels. */
+  --color-metro: #b26be0;
+  --color-metro-green: #34c26a;
 }
 
 html {
@@ -49,6 +52,46 @@ body {
 
 .animate-pulse-soft {
   animation: pulse-soft 1.2s ease-in-out infinite;
+}
+
+/* "Machaa, hurry up!": a friendly nudge on the clock badge, not an alarm. */
+@keyframes nudge {
+  0%,
+  70%,
+  100% {
+    transform: none;
+  }
+  74% {
+    transform: rotate(-2.5deg) translateX(-2px);
+  }
+  80% {
+    transform: rotate(2.5deg) translateX(2px);
+  }
+  86% {
+    transform: rotate(-1.5deg);
+  }
+  92% {
+    transform: rotate(1deg);
+  }
+}
+
+.animate-nudge {
+  animation: nudge 2.6s ease-in-out infinite;
+}
+
+/* The player's vehicle on the route map hops along. */
+@keyframes hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.animate-hop {
+  animation: hop 0.8s ease-in-out infinite;
 }
 
 @keyframes rise {
@@ -138,27 +181,59 @@ body {
   animation: drift 18s ease-in-out infinite alternate;
 }
 
-@keyframes rain {
-  to {
-    background-position: -120px 240px;
+/* Rain: individual streaks falling at a slant (Backdrop renders the drops). */
+@keyframes rain-fall {
+  0% {
+    transform: translateY(-100%) translateX(10px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(100vh) translateX(-25px);
+    opacity: 0;
   }
 }
 
-.rain {
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg stroke='%23b4ccff' stroke-linecap='round'%3E%3Cpath d='M20 6l-7 14M74 30l-7 14M44 70l-7 14M104 88l-7 14M96 10l-5 10'/%3E%3C/g%3E%3C/svg%3E");
-  animation: rain 0.6s linear infinite;
+.rain-drop {
+  position: fixed;
+  top: -20px;
+  width: 2px;
+  height: 22px;
+  background: linear-gradient(transparent, rgba(96, 165, 250, 0.65));
+  pointer-events: none;
+  animation: rain-fall 0.85s linear infinite;
 }
 
-.rain-far {
-  opacity: 0.12;
-  background-size: 90px 90px;
-  animation-duration: 0.9s;
+/* The vehicle bouncing above your stop on the map. */
+@keyframes auto-bounce {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(1.5deg);
+  }
 }
 
-.rain-near {
-  opacity: 0.22;
+.auto-sprite {
+  display: inline-block;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: auto-bounce 0.6s ease-in-out infinite;
+}
+
+/* Roads you can take next, flowing forward. */
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.route-line-active {
+  stroke-dasharray: 6 6;
+  animation: dash-flow 1s linear infinite;
 }
 
 /* The street scene. Layers scroll only while a ride is carrying you (.scene-moving). */
@@ -269,17 +344,22 @@ body {
   .scene-lightning,
   .scene-takeoff,
   .bokeh,
-  .rain,
+  .rain-drop,
+  .auto-sprite,
+  .route-line-active,
   .animate-pop,
   .animate-stamp {
     animation: none;
   }
 
-  .animate-pop {
+  .animate-pop,
+  .rain-drop {
     display: none;
   }
 
   .animate-pulse-soft,
+  .animate-nudge,
+  .animate-hop,
   .animate-draw,
   .animate-rise {
     animation: none;
