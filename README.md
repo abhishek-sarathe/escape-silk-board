@@ -112,7 +112,7 @@ Every LLM call, success or failure, is logged to SQLite (`.data/llm-calls.sqlite
 - `npm run usage` prints totals, a breakdown by role and model, and the last games.
 - `GET /api/usage` returns the same as JSON. It's open in development; in production it needs `?key=<USAGE_KEY>`.
 
-On Vercel the disk is read-only, so the log turns itself off (one warning in the function logs) and turns carry on normally. Production metering needs a hosted database; only `src/server/llmLog.ts` has to change.
+On Vercel the log writes to the function's temporary disk. It works, but each server instance keeps its own copy and loses it when the instance is recycled or the app is redeployed, so `/api/usage` shows recent calls, not all-time totals. For durable production metering, point `src/server/llmLog.ts` at a hosted database; nothing else has to change. If the log can't be written, it switches itself off and turns carry on normally.
 
 ## Deploy (Vercel)
 
