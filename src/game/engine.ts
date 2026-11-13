@@ -707,7 +707,8 @@ function diffItems(before: ItemId[], after: ItemId[]): ItemId[] {
   return rest;
 }
 
-export function resolveTurn(prev: GameState, action: Action): TurnResult {
+/** `oneStop`: a "continue" moves just one stop (the automatic ride uses it, so each stop gets its own update). */
+export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: boolean } = {}): TurnResult {
   if (prev.status !== "playing") throw new Error("The game is over.");
   const s: GameState = structuredClone(prev);
   s.turn += 1;
@@ -805,7 +806,7 @@ export function resolveTurn(prev: GameState, action: Action): TurnResult {
 
   // "Keep going" skips the boring part: ride on, stop by stop, until you arrive, something happens,
   // the city asks you something, your friend is there, or check-in closes.
-  for (let stop = 1; action.kind === "continue" && s.ride && !event && !s.pending && s.status === "playing" && s.minutes <= CHECKIN_CLOSES; stop++) {
+  for (let stop = 1; action.kind === "continue" && !opts.oneStop && s.ride && !event && !s.pending && s.status === "playing" && s.minutes <= CHECKIN_CLOSES; stop++) {
     if (s.meet && s.ride.transport !== "lift" && s.location === s.meet.place) break;
     const m = advanceRide(s, ctx);
     turnMinutes += m;

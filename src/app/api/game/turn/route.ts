@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { runGameMaster, type GameMasterResult } from "@/ai/gameMaster";
-import { parseLocally } from "@/ai/localParser";
+import { blankAction, parseLocally } from "@/ai/localParser";
 import { narrate, plainNarration } from "@/ai/narrator";
 import { nextMoves } from "@/ai/tools";
 import type { LlmUsage } from "@/ai/providers";
@@ -36,6 +36,8 @@ function withDeadline<T>(work: Promise<T>, ms: number, fallback: () => T): Promi
 const Body = z.object({
   token: z.string().min(16).max(60_000),
   input: z.string().max(2_000),
+  /** Sent by the browser's ride timer, not typed: the ride moves one stop, with no AI reading the move. */
+  auto: z.boolean().optional(),
 });
 
 function cleanInput(text: string): string {
@@ -77,8 +79,12 @@ export async function POST(request: Request) {
   const meter = { gameId: state.id ?? `seed-${state.seed}`, seed: state.seed, turn: state.turn + 1 };
   // Time budgets keep a turn from hanging when a provider is slow: past them the game answers anyway,
   // with the keyword parser for the move and plain sentences for the story. Totals stay well under maxDuration.
+  // The automatic ride only ever means "ride on", and only while riding with nothing to decide.
+  const autoRide = parsed.data.auto === true && state.ride !== null && !state.pending;
   const { referee, next, outcome, narrator } = await withTurn(meter, async () => {
-    const referee: GameMasterResult = await withDeadline(
+    const referee: GameMasterResult = autoRide
+      ? { action: { ...blankAction("ride on"), kind: "continue" }, via: "auto-ride", usage: null, trace: [], lookups: [], notes: state.notes ?? [] }
+      : await withDeadline(
       process.env.REFEREE_MODE === "classic"
         ? interpret(state, input).then((r) => ({ ...r, trace: [], lookups: [], notes: state.notes ?? [] }))
         : runGameMaster(state, input),
@@ -92,7 +98,7 @@ export async function POST(request: Request) {
         notes: state.notes ?? [],
       }),
     );
-    const { state: next, outcome } = resolveTurn(state, referee.action);
+    const { state: next, outcome } = resolveTurn(state, referee.action, { oneStop: autoRide });
     next.notes = referee.notes;
     const narrator = await withDeadline(narrate(next, input, outcome, referee.lookups), NARRATE_BUDGET_MS, () => ({
       text: plainNarration(outcome, next),

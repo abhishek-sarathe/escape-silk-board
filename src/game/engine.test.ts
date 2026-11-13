@@ -226,6 +226,17 @@ describe("endings", () => {
   });
 });
 
+describe("the automatic ride", () => {
+  it("moves one stop at a time, where a typed 'keep going' rides on until something happens", () => {
+    const start = resolveTurn(newGame(11), act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" })).state;
+    expect(start.ride).not.toBeNull();
+    const oneStop = resolveTurn(start, act({ kind: "continue" }), { oneStop: true }).state;
+    const allTheWay = resolveTurn(start, act({ kind: "continue" })).state;
+    expect(oneStop.visited.length).toBe(start.visited.length + 1);
+    expect(allTheWay.visited.length).toBeGreaterThanOrEqual(oneStop.visited.length);
+  });
+});
+
 describe("determinism and balance", () => {
   const smart: Partial<Action>[] = [
     { kind: "hire", transport: "bike_taxi", destination: "hebbal" },

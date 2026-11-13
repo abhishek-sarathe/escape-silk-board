@@ -13,7 +13,7 @@ import { readRecord, saveResult, type PlayerRecord } from "./record";
 import { mixMoves, suggest } from "./suggestions";
 
 /** Seconds of quiet during a ride before it moves on by itself. */
-const AUTO_RIDE_SECONDS = 12;
+const AUTO_RIDE_SECONDS = 10;
 
 export default function Game() {
   const [state, setState] = useState<PublicState | null>(null);
@@ -72,14 +72,15 @@ export default function Game() {
     feedEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [entries.length]);
 
-  async function send(text: string) {
+  /** `auto`: sent by the ride timer. It moves one stop and shows no "you said" bubble. */
+  async function send(text: string, auto = false) {
     const said = text.trim();
     if (!said || !token || !state || busy || state.status !== "playing") return;
     setBusy(true);
     setInput("");
-    setEntries((prev) => [...prev, entry({ kind: "player", text: said })]);
+    if (!auto) setEntries((prev) => [...prev, entry({ kind: "player", text: said })]);
     try {
-      const data = await playTurn(token, said);
+      const data = await playTurn(token, said, auto);
       setLastShown(moves);
       setPlanned(data.suggestions ?? []);
       setState(data.state);
@@ -93,7 +94,7 @@ export default function Game() {
       setEntries((prev) => [...prev, entry({ kind: "narrator", text: data.narration, at: data.state.minutes, outcome: data.outcome, trace: data.trace })]);
     } catch (err) {
       setEntries((prev) => [...prev, entry({ kind: "error", text: err instanceof Error ? err.message : "Something went wrong." })]);
-      setInput(said);
+      if (!auto) setInput(said);
     } finally {
       setBusy(false);
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -121,7 +122,7 @@ export default function Game() {
       if (left <= 0) {
         clearInterval(tick);
         setAutoIn(null);
-        void autoRef.current("Keep going");
+        void autoRef.current("Ride on", true);
       }
     }, 1000);
     return () => {

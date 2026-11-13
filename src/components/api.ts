@@ -40,4 +40,5 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 
 export const startGame = (seed?: number) => post<NewGameResponse>("/api/game/new", { seed });
 
-export const playTurn = (token: string, input: string) => post<TurnResponse>("/api/game/turn", { token, input });
+export const playTurn = (token: string, input: string, auto = false) =>
+  post<TurnResponse>("/api/game/turn", { token, input, ...(auto ? { auto: true } : {}) });
