@@ -254,7 +254,7 @@ describe("determinism and balance", () => {
       if (bus.state.status === "won") busWins++;
     }
     expect(smartWins).toBeGreaterThan(120);
-    expect(busWins).toBeLessThan(40); // the KIA-8 from Silk Board is mostly a trap; see balance.test.ts
+    expect(busWins).toBeLessThan(100); // the KIA-8 from Silk Board loses more often than it wins; see balance.test.ts
   });
 });
 

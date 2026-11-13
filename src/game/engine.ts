@@ -523,7 +523,7 @@ function checkIn(s: GameState, ctx: Ctx) {
   }
   ctx.checkIn = true;
   if (s.battery > 0) {
-    ctx.facts.push("You flash the e-ticket on your phone at the gate and run for the counter.");
+    ctx.facts.push("You flash the e-ticket on your phone at the gate and run into the check-in queue.");
     ctx.actionMinutes += CHECKIN_MINUTES;
   } else {
     ctx.facts.push("Your phone is dead, so there's no e-ticket. The gate sends you to the airline desk for a printout first.");
@@ -823,6 +823,19 @@ export function resolveTurn(prev: GameState, action: Action): TurnResult {
   else if (batteryBefore > BATTERY.lowWarning && s.battery <= BATTERY.lowWarning)
     ctx.facts.push(`Low battery warning: ${s.battery}%.`);
 
+  // Arriving is checking in: dropped at departures, you run straight for the counter in the same turn,
+  // so no turn (and no minutes) is lost typing "check in".
+  if (s.status === "playing" && !ctx.checkIn && !s.ride && s.location === "airport" && prev.location !== "airport") {
+    ctx.checkIn = true;
+    const dash = s.battery > 0 ? CHECKIN_MINUTES : CHECKIN_MINUTES + NO_PHONE_CHECKIN_PENALTY;
+    ctx.facts.push(
+      s.battery > 0
+        ? "You run from the drop-off straight into the check-in queue, e-ticket open on your phone."
+        : "Your phone is dead, so there's no e-ticket. The gate sends you to the airline desk for a printout first.",
+    );
+    s.minutes += dash;
+    turnMinutes += dash;
+  }
 
   if (s.status === "playing") {
     if (ctx.checkIn) {

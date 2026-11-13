@@ -61,7 +61,7 @@ describe("Evals Suite: Core Game Dimensions", () => {
     it("eval: check-in after 8:55 PM (115 min) ends in 'lost' with clear cause", () => {
       const s = newGame(88);
       s.location = "airport";
-      s.minutes = 112; // 8:52 PM -> +6 min check-in = 118 min (8:58 PM, after 8:55 PM)
+      s.minutes = 115; // 8:55 PM -> +1 min dash to the queue = 116 min (8:56 PM, after 8:55 PM)
 
       const { state } = resolveTurn(s, act({ kind: "check_in" }));
       expect(state.status).toBe("lost");
@@ -191,14 +191,19 @@ describe("Evals Suite: Core Game Dimensions", () => {
         s = r.state;
       }
 
+      // Step 3: arriving at departures runs you into the check-in queue in the same turn.
       expect(s.location).toBe("airport");
-      expect(s.status).toBe("playing");
-      expect(s.minutes).toBeLessThan(CHECKIN_CLOSES);
+      expect(s.status).toBe("won");
+      expect(s.minutes).toBeLessThanOrEqual(CHECKIN_CLOSES);
+    });
 
-      // Step 3: Check in at airport counter
-      r = resolveTurn(s, act({ kind: "check_in" }));
-      expect(r.state.status).toBe("won");
-      expect(r.state.minutes).toBeLessThanOrEqual(CHECKIN_CLOSES);
+    it("eval: arriving with a minute left wins; arriving after 8:55 PM loses", () => {
+      const onTime = { ...newGame(5), location: "yelahanka" as const, minutes: 100, ride: { transport: "cab" as const, destination: "airport" as const } };
+      const r = resolveTurn(onTime, act({ kind: "continue" }));
+      expect(r.state.location).toBe("airport");
+      if (r.state.minutes <= CHECKIN_CLOSES) expect(r.state.status).toBe("won");
+      else expect(r.state.status).toBe("lost");
+      expect(r.outcome.facts.join(" ")).toMatch(/check-in queue|printout/);
     });
   });
 

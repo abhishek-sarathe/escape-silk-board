@@ -90,7 +90,11 @@ export const BATTERY = {
 export const CHARGING_FEE = 20;
 export const CHARGE_MINUTES: [number, number] = [5, 30];
 
-export const CHECKIN_MINUTES = 6;
+/**
+ * The dash from the departures curb into the check-in queue. Short on purpose: the clock tells players
+ * "time until check-in closes", so reaching the airport with a minute left has to be a win.
+ */
+export const CHECKIN_MINUTES = 1;
 /** No phone means no e-ticket: queue at the airline desk for a printout first. */
 export const NO_PHONE_CHECKIN_PENALTY = 12;
 
