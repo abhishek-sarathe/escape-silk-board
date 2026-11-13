@@ -108,7 +108,10 @@ export interface GameState {
   /** Minutes since 7:00 PM. Only ever increases. */
   minutes: number;
   battery: number;
+  /** Notes and coins: always spendable. */
   cash: number;
+  /** Money in the bank, spendable by UPI only while the phone has charge (missing on old saved games: 0). */
+  upi?: number;
   location: LocationId;
   inventory: ItemId[];
   ride: Ride | null;

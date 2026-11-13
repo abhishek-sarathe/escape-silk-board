@@ -78,12 +78,14 @@ The map (`src/components/BengaluruMap.tsx`) is the one thing this game is built 
 Eleven real places and three ways north: the Outer Ring Road (HSR, Marathahalli, KR Puram, then Hennur or Hebbal), through the centre (Koramangala, MG Road), and the back way out east via Hoskote. From Hebbal the NH-44 runs past Yelahanka with a ₹120 toll for cabs and autos. From Hennur the Hennur–Bagalur road goes straight up. The Hoskote road is toll-free. Autos haggle, and cabs and bike taxis need a living phone and charge surge prices. The city helps as well as hinders: a stranger may offer a lift, or a constable may wave your lane through.
 
 - **Distances** are real road distances from OpenStreetMap routing (OSRM).
-- **7 PM drive times** are empty-road times multiplied by a traffic factor per kind of road. TomTom's 2025 index puts Bengaluru's evening rush at ×2.15. At that, almost nobody makes check-in, so the factors are tuned down until scripted players win a little over half the time (about 62%; first-time players win less) (`src/game/balance.ts`, enforced by `balance.test.ts`).
+- **7 PM drive times** are empty-road times multiplied by a traffic factor per kind of road. TomTom's 2025 index puts Bengaluru's evening rush at ×2.15. At that, almost nobody makes check-in, so the factors are tuned down until scripted players win a little over half the time (about 56%; first-time players win less) (`src/game/balance.ts`, enforced by `balance.test.ts`).
 - **Buses** get the real Outer Ring Road bus priority lane between Silk Board and KR Puram.
 
 The rules' numbers are in `src/game/rules.ts`.
 
 ### The city asks you things
+
+**Money and phone:** you start with ₹120 in cash and ₹380 on UPI (`src/game/money.ts`). UPI works only while the phone has charge, and app rides (cab, bike taxi) take UPI only; autos, buses and shops take either, UPI first. The phone starts at 24% and drains as the evening goes, so a dead phone locks most of your money. Charging at a shop costs time; a cab charges you on the way but costs more. Run out of money that works, with no free way on, and the evening ends: stranded. In simulation, about a third of losses now come from money or the phone instead of the clock.
 
 **Winning:** be in the check-in queue by 8:55 PM. Arriving at departures runs you straight in (a 1-minute dash) in the same turn, so reaching the airport with a minute left is a win. A dead phone means no e-ticket: 12 more minutes at the airline desk for a printout.
 

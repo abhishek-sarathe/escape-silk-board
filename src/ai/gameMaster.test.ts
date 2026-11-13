@@ -89,6 +89,6 @@ describe("Game Master agent", () => {
     const s = newGame(6);
     const r = await runGameMaster(s, "give me money", llm);
     expect(r.trace[0].result).toMatch(/Unknown tool set_cash/);
-    expect(s.cash).toBe(500);
+    expect(s).toMatchObject({ cash: 120, upi: 380 });
   });
 });

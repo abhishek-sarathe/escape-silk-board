@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { totalMoney } from "./money";
 import { blankAction } from "@/ai/localParser";
 import { parseLocally } from "@/ai/localParser";
 import { newGame, resolveTurn } from "./engine";
@@ -25,7 +26,7 @@ describe("mid-ride decisions", () => {
   it("answering a breakdown by sharing an auto pays ₹60 and switches vehicles", () => {
     const { state, outcome } = resolveTurn(asked("breakdown", onKia8()), act({ kind: "choose", choice: "share_auto" }));
     expect(state.pending).toBeNull();
-    expect(state.cash).toBe(440);
+    expect(totalMoney(state)).toBe(440);
     expect(state.ride?.transport).toBe("auto");
     expect(outcome.facts.join(" ")).toMatch(/three strangers/);
   });
@@ -41,11 +42,11 @@ describe("mid-ride decisions", () => {
     let s = asked("friend", { location: "kr_puram", visited: ["silk_board", "hsr", "marathahalli", "kr_puram"] });
     s = resolveTurn(s, act({ kind: "choose", choice: "yes" })).state;
     expect(s.meet?.place).toBe("hennur");
-    const cash = s.cash;
+    const money = totalMoney(s);
     s = resolveTurn(s, act({ kind: "hire", transport: "bus", destination: "hennur" })).state;
     expect(s.location).toBe("hennur");
     expect(s.ride).toMatchObject({ transport: "lift", destination: "airport" });
-    expect(s.cash).toBe(cash - 30); // only the bus to Hennur was paid for
+    expect(totalMoney(s)).toBe(money - 30); // only the bus to Hennur was paid for
   });
 
   it("an option can be picked by key, by number or by its label", () => {

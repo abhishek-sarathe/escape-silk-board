@@ -3,6 +3,7 @@
 // the effects below are the rules, the narrator only tells them.
 import { isBus } from "./buses";
 import { PLACES, edgeBetween, kmToAirport, route } from "./map";
+import { describeWallet, spendable } from "./money";
 import type { Rng } from "./rng";
 import { BATTERY, MAX_INVENTORY } from "./rules";
 import type { Decision, GameState, LocationId, Transport } from "./types";
@@ -47,8 +48,8 @@ export const ENCOUNTERS: EncounterSpec[] = [
     resolve: (s, key, k) => {
       const dest = s.ride!.destination;
       if (key === "share_auto") {
-        if (s.cash < 60) {
-          k.refuse(`The strangers want ₹60 each. You have ₹${s.cash}. You wait for the next bus instead.`);
+        if (spendable(s) < 60) {
+          k.refuse(`The strangers want ₹60 each. You have ${describeWallet(s)}. You wait for the next bus instead.`);
           s.pendingDelay += 15;
           s.pendingDelayReason = "waiting for the next bus";
           return;
@@ -80,7 +81,7 @@ export const ENCOUNTERS: EncounterSpec[] = [
     }),
     resolve: (s, key, k) => {
       if (key !== "take_it") return k.fact("You stay on the main road. The driver sighs like you've insulted his mother's cooking.");
-      if (s.cash < 50) return k.refuse(`The shortcut costs ₹50. You have ₹${s.cash}. Main road it is.`);
+      if (spendable(s) < 50) return k.refuse(`The shortcut costs ₹50. You have ${describeWallet(s)}. Main road it is.`);
       k.pay(50);
       if (k.rng() < 0.6) {
         s.shortcutBonus -= 10;
@@ -105,7 +106,7 @@ export const ENCOUNTERS: EncounterSpec[] = [
     }),
     resolve: (s, key, k) => {
       if (key === "detour") {
-        const paid = s.ride && (s.ride.transport === "auto" || s.ride.transport === "cab") ? Math.min(30, s.cash) : 0;
+        const paid = s.ride && (s.ride.transport === "auto" || s.ride.transport === "cab") ? Math.min(30, spendable(s)) : 0;
         if (paid) k.pay(paid);
         s.pendingDelay += 6;
         s.pendingDelayReason = "the flood detour";

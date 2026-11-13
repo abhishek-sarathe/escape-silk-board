@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { totalMoney } from "./money";
 import { blankAction, parseLocally } from "@/ai/localParser";
 import { normalise } from "@/ai/referee";
 import { newGame, resolveTurn } from "./engine";
@@ -112,8 +113,8 @@ describe("Evals Suite: Core Game Dimensions", () => {
     it("eval: cash cannot be overspent, even through highball auto haggle", () => {
       const s = newGame(12);
       const res = resolveTurn(s, act({ kind: "hire", transport: "auto", destination: "airport", offer: 1200 }));
-      expect(res.state.cash).toBe(500);
-      expect(res.outcome.refused.join(" ")).toMatch(/only have ₹500/);
+      expect(totalMoney(res.state)).toBe(500);
+      expect(res.outcome.refused.join(" ")).toMatch(/only have ₹120 cash and ₹380 on UPI/);
     });
   });
 

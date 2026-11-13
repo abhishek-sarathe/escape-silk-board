@@ -2,8 +2,11 @@
 import type { ItemId, Transport } from "./types";
 
 export const START = {
-  battery: 32,
-  cash: 500,
+  battery: 24,
+  /** Pocket cash: the only money that works once the phone dies. */
+  cash: 120,
+  /** Bank money, by UPI, only while the phone has charge (see money.ts). */
+  upi: 380,
   inventory: ["samosa"] as ItemId[],
   location: "silk_board" as const,
 };
@@ -17,7 +20,7 @@ export const CHECKIN_CLOSES = 115;
  * almost nobody makes an 8:55 check-in from Silk Board (8% in simulation), so these are tuned down until
  * the scripted players in balance.ts win about half the time. Real distances; game-tuned traffic.
  */
-export const TRAFFIC: Record<"city" | "arterial" | "highway", number> = { city: 1.3, arterial: 1.3, highway: 1.0 };
+export const TRAFFIC: Record<"city" | "arterial" | "highway", number> = { city: 1.25, arterial: 1.25, highway: 1.0 };
 
 /**
  * The Outer Ring Road bus priority lane (Silk Board to KR Puram): buses on these stretches take
@@ -77,7 +80,7 @@ export const RAIN = { road: 1.25, bike: 1.6, walk: 1.4 };
 
 export const BATTERY = {
   /** The phone loses 1% every N minutes just from being checked constantly. */
-  drainEvery: 6,
+  drainEvery: 5,
   call: 3,
   appBooking: 4,
   /** % gained per minute plugged in at a shop. */

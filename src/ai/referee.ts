@@ -6,6 +6,7 @@ import { ITEMS, TRANSPORT } from "@/game/rules";
 import { ACTION_KINDS, ITEM_IDS, LOCATION_IDS, TRANSPORTS } from "@/game/types";
 import type { Action, GameState, ItemId, LocationId } from "@/game/types";
 import { parseLocally } from "./localParser";
+import { describeWallet } from "@/game/money";
 import { chat, type LlmUsage } from "./providers";
 
 const numberish = z
@@ -117,7 +118,7 @@ export function context(s: GameState): string {
     `FRIEND WAITING: ${s.meet ? `at ${s.meet.place}` : "none"}`,
     `BAG: ${bag}`,
     `CATALOG: ${catalog}`,
-    `CASH: ₹${s.cash}. BATTERY: ${s.battery}%.`,
+    `MONEY: ${describeWallet(s)}. App rides are paid by UPI only. BATTERY: ${s.battery}%.`,
     `PLACES:\n${places}`,
   ].join("\n");
 }

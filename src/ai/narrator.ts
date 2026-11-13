@@ -4,6 +4,7 @@ import { localColour } from "@/game/lore";
 import { PLACES } from "@/game/map";
 import { ITEMS, TRANSPORT } from "@/game/rules";
 import type { GameState, Outcome } from "@/game/types";
+import { describeWallet } from "@/game/money";
 import { chat, type LlmUsage } from "./providers";
 
 const SYSTEM = `You are the narrator of "Escape Silk Board", a text adventure. It is evening in Bengaluru. The player is trying to get from Silk Board junction to the airport before check-in closes at 8:55 PM.
@@ -47,7 +48,7 @@ function snapshot(s: GameState): string {
     ? ` In the ${s.ride.line ? `${s.ride.line} ` : ""}${TRANSPORT[s.ride.transport].label} heading to ${PLACES[s.ride.destination].short}.`
     : " On foot.";
   const bag = s.inventory.length ? s.inventory.map((i) => ITEMS[i].label).join(", ") : "empty";
-  return `${formatClock(s.minutes)} (${formatDuration(minutesLeft(s.minutes))} until check-in closes). Battery ${s.battery}%. Cash ₹${s.cash}. At ${PLACES[s.location].name}.${ride} Bag: ${bag}.${s.raining ? " It is raining." : ""}`;
+  return `${formatClock(s.minutes)} (${formatDuration(minutesLeft(s.minutes))} until check-in closes). Battery ${s.battery}%. Money: ${describeWallet(s)}. At ${PLACES[s.location].name}.${ride} Bag: ${bag}.${s.raining ? " It is raining." : ""}`;
 }
 
 function prompt(after: GameState, input: string, outcome: Outcome, lookups: string[]): string {
@@ -148,4 +149,4 @@ export async function narrate(after: GameState, input: string, outcome: Outcome,
 }
 
 export const INTRO =
-  "7:00 PM at Silk Board, and nothing is moving. Your flight leaves at 9:40, and check-in closes at 8:55. You have ₹500, 32% battery and one cold samosa. An auto is waiting nearby. Where to, machaa?";
+  "7:00 PM at Silk Board, and nothing is moving. Your flight leaves at 9:40, and check-in closes at 8:55. You have ₹120 in cash, ₹380 on UPI (only while your phone lives), 24% battery and one cold samosa. An auto is waiting nearby. Where to, machaa?";

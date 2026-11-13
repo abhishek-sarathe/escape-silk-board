@@ -15,7 +15,7 @@ describe("agent tools", () => {
   });
 
   it("plan_trip never suggests something the player can't pay for", () => {
-    const broke = { ...newGame(7), cash: 60, inventory: [] };
+    const broke = { ...newGame(7), cash: 60, upi: 0, inventory: [] };
     const plan = runLookup(broke, "plan_trip", { prefer: "fastest" }) as Plan;
     for (const o of plan.options) expect(o.total_fare).toBeLessThanOrEqual(60);
   });

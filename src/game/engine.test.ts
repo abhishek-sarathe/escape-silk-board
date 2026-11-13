@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { totalMoney } from "./money";
 import { blankAction } from "@/ai/localParser";
 import { fixedFare, newGame, resolveTurn } from "./engine";
 import { CHECKIN_CLOSES } from "./rules";
@@ -20,9 +21,9 @@ function play(state: GameState, ...actions: Partial<Action>[]) {
 }
 
 describe("the world plays fair", () => {
-  it("starts at Silk Board, 7:00 PM, 32%, ₹500, one samosa", () => {
+  it("starts at Silk Board, 7:00 PM, 24%, ₹120 cash + ₹380 UPI, one samosa", () => {
     const s = newGame(1);
-    expect(s).toMatchObject({ minutes: 0, battery: 32, cash: 500, location: "silk_board", inventory: ["samosa"] });
+    expect(s).toMatchObject({ minutes: 0, battery: 24, cash: 120, upi: 380, location: "silk_board", inventory: ["samosa"] });
   });
 
   it("time moves forward on every kind of action, even refused ones", () => {
@@ -35,8 +36,8 @@ describe("the world plays fair", () => {
   it("never spends money you don't have", () => {
     const s = newGame(3);
     const { state, outcome } = resolveTurn(s, act({ kind: "hire", transport: "auto", destination: "airport", offer: 900 }));
-    expect(state.cash).toBe(500);
-    expect(outcome.refused.join(" ")).toMatch(/only have ₹500/);
+    expect(totalMoney(state)).toBe(500);
+    expect(outcome.refused.join(" ")).toMatch(/only have ₹120 cash and ₹380 on UPI/);
   });
 
   it("can't afford an app ride to the airport straight from Silk Board", () => {
@@ -49,7 +50,7 @@ describe("the world plays fair", () => {
     const s = { ...newGame(4), battery: 0 };
     const bike = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" }));
     expect(bike.state.ride).toBeNull();
-    expect(bike.state.cash).toBe(500);
+    expect(totalMoney(bike.state)).toBe(500);
     const call = resolveTurn(s, act({ kind: "call", who: "friend" }));
     expect(call.outcome.refused.join(" ")).toMatch(/dead/);
   });
@@ -135,7 +136,7 @@ describe("real BMTC buses", () => {
 
   it("a route that doesn't stop here is refused without moving", () => {
     const { state, outcome } = resolveTurn(newGame(5), act({ kind: "hire", line: "281-AP" }));
-    expect(state).toMatchObject({ location: "silk_board", ride: null, cash: 500 });
+    expect(state).toMatchObject({ location: "silk_board", ride: null, cash: 120, upi: 380 });
     expect(outcome.refused[0]).toMatch(/No 281-AP bus stops at Silk Board/);
   });
 
@@ -143,7 +144,7 @@ describe("real BMTC buses", () => {
     const s = { ...newGame(5), location: "hebbal" as const, visited: ["silk_board" as const, "hebbal" as const] };
     const { state } = resolveTurn(s, act({ kind: "hire", transport: "bus", destination: "airport" }));
     expect(state.ride).toMatchObject({ transport: "bus", line: "281-AP" });
-    expect(state.cash).toBe(460);
+    expect(state).toMatchObject({ cash: 120, upi: 340 }); // UPI goes first while the phone works
   });
 });
 
@@ -155,7 +156,7 @@ describe("haggling", () => {
     expect(asked.state.quote).not.toBeNull();
     const ask = asked.state.quote!.ask;
     const deal = resolveTurn(asked.state, act({ kind: "hire", transport: "auto", destination: "koramangala", acceptAsk: true }));
-    expect(deal.state.cash).toBe(500 - ask);
+    expect(totalMoney(deal.state)).toBe(500 - ask);
     expect(deal.state.location).toBe("koramangala");
   });
 
@@ -163,7 +164,7 @@ describe("haggling", () => {
     const { state, outcome } = resolveTurn(newGame(3), act({ kind: "hire", transport: "auto", destination: "airport", offerMeter: true }));
     expect(outcome.refused).toEqual([]);
     expect(outcome.facts.join(" ")).toMatch(/refuses the meter|drives off/);
-    expect(state.cash).toBe(500);
+    expect(totalMoney(state)).toBe(500);
   });
 
   it("a ₹1 offer doesn't make the driver show his lowest price", () => {
@@ -184,11 +185,11 @@ describe("haggling", () => {
   it("checking a price books nothing and costs no money", () => {
     for (const transport of ["bike_taxi", "cab", "bus"] as const) {
       const { state, outcome } = resolveTurn(newGame(24), act({ kind: "hire", transport, destination: "hsr", priceCheck: true }));
-      expect(state, transport).toMatchObject({ cash: 500, ride: null, location: "silk_board" });
+      expect(state, transport).toMatchObject({ cash: 120, upi: 380, ride: null, location: "silk_board" });
       expect(outcome.facts.join(" "), transport).toMatch(/₹\d+/);
     }
     const auto = resolveTurn(newGame(24), act({ kind: "hire", transport: "auto", destination: "hsr", priceCheck: true, acceptAsk: true }));
-    expect(auto.state).toMatchObject({ cash: 500, ride: null });
+    expect(auto.state).toMatchObject({ cash: 120, upi: 380, ride: null });
     expect(auto.state.quote).not.toBeNull();
   });
 
@@ -275,6 +276,7 @@ describe("the samosa saves a bus fare", () => {
     location: "mg_road",
     visited: ["silk_board", "koramangala", "mg_road"],
     cash,
+    upi: 0,
     inventory,
   });
   const bus = { ...blankAction("take the airport bus"), kind: "hire" as const, transport: "airport_bus" as const, destination: "airport" as const };
@@ -293,5 +295,49 @@ describe("the samosa saves a bus fare", () => {
     const fare = fixedFare(11, "airport_bus", "mg_road", "airport")!;
     expect(resolveTurn(atMg(fare - 80), bus).state.ride).toBeNull();
     expect(resolveTurn(atMg(fare - 3, []), bus).state.ride).toBeNull();
+  });
+});
+
+describe("cash and UPI", () => {
+  const atHebbal = (battery: number, cash: number, upi: number): GameState => ({
+    ...newGame(5),
+    location: "hebbal",
+    visited: ["silk_board", "hebbal"],
+    battery,
+    cash,
+    upi,
+  });
+  const kia = act({ kind: "hire", transport: "airport_bus", destination: "airport" });
+
+  it("app rides take UPI only: pocket cash can't pay for a bike taxi", () => {
+    const { state, outcome } = resolveTurn({ ...newGame(4), cash: 500, upi: 0 }, act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" }));
+    expect(state.ride).toBeNull();
+    expect(outcome.refused.join(" ")).toMatch(/UPI/);
+  });
+
+  it("a dead phone locks the UPI money: only cash pays", () => {
+    const fare = fixedFare(5, "airport_bus", "hebbal", "airport")!;
+    expect(resolveTurn(atHebbal(40, 20, fare), kia).state.ride?.transport).toBe("airport_bus");
+    const dead = resolveTurn(atHebbal(0, 20, fare), kia);
+    expect(dead.state.ride).toBeNull();
+    expect(dead.outcome.refused.join(" ")).toMatch(/stuck in UPI: your phone is dead/);
+  });
+
+  it("the phone dying says how much money just went out of reach", () => {
+    const s = { ...newGame(6), battery: 1 };
+    const { outcome } = resolveTurn(s, act({ kind: "wait", minutes: 10 }));
+    expect(outcome.facts.join(" ")).toMatch(/₹380 on UPI is out of reach/);
+  });
+
+  it("stranded with no money that works and no free way on: the evening ends", () => {
+    const s: GameState = { ...newGame(7), location: "yelahanka", visited: ["silk_board", "hebbal", "yelahanka"], battery: 0, cash: 5, upi: 300, inventory: [] };
+    const { state } = resolveTurn(s, act({ kind: "wait", minutes: 2 }));
+    expect(state.status).toBe("lost");
+    expect(state.endReason).toMatch(/^Stranded at Yelahanka/);
+  });
+
+  it("not stranded while a shop can charge the phone and unlock the UPI money", () => {
+    const s: GameState = { ...newGame(7), location: "yelahanka", visited: ["silk_board", "hebbal", "yelahanka"], battery: 0, cash: 40, upi: 300, inventory: [] };
+    expect(resolveTurn(s, act({ kind: "wait", minutes: 2 })).state.status).toBe("playing");
   });
 });

@@ -4,6 +4,7 @@
 import { formatClock, minutesLeft } from "@/game/clock";
 import { busLink, busSpeed, isBus, type BusType } from "@/game/buses";
 import { fixedFare, meterFare } from "@/game/engine";
+import { describeWallet, spendable } from "@/game/money";
 import { PLACES, edgeBetween, findPlace, kmToAirport, neighbors, pathKm, route, tollOn } from "@/game/map";
 import { BUS_LANE, ITEMS, MAX_WALK_KM, SAMOSA_FARE_COVER, TRANSPORT, WALK_MIN_PER_KM } from "@/game/rules";
 import { ACTION_KINDS, LOCATION_IDS, TRANSPORTS, type GameState, type LocationId, type Transport } from "@/game/types";
@@ -103,6 +104,9 @@ function lookAround(s: GameState) {
     clock: formatClock(s.minutes),
     minutes_until_checkin_closes: minutesLeft(s.minutes),
     cash: s.cash,
+    upi: s.upi ?? 0,
+    upi_usable: s.battery > 0,
+    spendable_now: spendable(s),
     battery: s.battery,
     phone_works: s.battery > 0,
     bag: s.inventory.map((i) => ITEMS[i].label),
@@ -156,7 +160,7 @@ function quote(s: GameState, transport: Transport, to: LocationId, from: Locatio
     return { meter_estimate: meterFare("auto", pathKm(path)) + toll, note: "Drivers ask more than the meter; haggling needed.", toll, rough_minutes: minutes };
   }
   if (spec.needsPhone && s.battery <= 0) return { error: `Phone is dead: no ${spec.label}.` };
-  return { app_price: fixedFare(s.seed, transport, from, to), toll, rough_minutes: minutes, needs_phone: spec.needsPhone };
+  return { app_price: fixedFare(s.seed, transport, from, to), paid_by: "UPI only", upi_available: spendable(s, "upi"), toll, rough_minutes: minutes, needs_phone: spec.needsPhone };
 }
 
 interface Leg {
@@ -177,6 +181,7 @@ function legs(s: GameState, from: LocationId, to: LocationId): Leg[] {
     if (TRANSPORT[t].needsPhone && s.battery <= 0) continue;
     const path = route(from, to, t)!;
     const fare = t === "auto" ? meterFare("auto", pathKm(path)) + tollOn(path, t) : fixedFare(s.seed, t, from, to)!;
+    if (TRANSPORT[t].needsPhone && fare > spendable(s, "upi")) continue; // app rides are UPI only
     out.push({ how: t === "auto" ? "auto (meter estimate; expect to haggle)" : TRANSPORT[t].label, to, fare, minutes: TRANSPORT[t].wait + rideMinutes(path, t) });
   }
   const edge = edgeBetween(from, to);
@@ -189,7 +194,7 @@ type Trip = { legs: Leg[]; fare: number; minutes: number };
 /** Best one- and two-leg itineraries, ranked by cost or time. Estimates before rain and city events. */
 function bestTrips(s: GameState, to: LocationId, prefer: "cheapest" | "fastest"): Trip[] {
   const left = minutesLeft(s.minutes);
-  const budget = s.cash + (s.inventory.includes("samosa") ? SAMOSA_FARE_COVER : 0);
+  const budget = spendable(s) + (s.inventory.includes("samosa") ? SAMOSA_FARE_COVER : 0);
   const trips: Trip[] = [];
   for (const leg of legs(s, s.location, to)) trips.push({ legs: [leg], fare: leg.fare, minutes: leg.minutes });
   for (const mid of LOCATION_IDS) {
@@ -211,7 +216,7 @@ function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") 
   const best = bestTrips(s, to, prefer);
   return {
     note: "Rough estimates before rain, hold-ups and haggling.",
-    cash: s.cash,
+    money: describeWallet(s),
     minutes_left: left,
     options: best.map((t) => ({
       steps: t.legs.map((l) => `${l.how} to ${place(l.to)} (₹${l.fare}, ~${l.minutes} min)`),

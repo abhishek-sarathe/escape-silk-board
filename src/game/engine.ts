@@ -1,9 +1,10 @@
 // The rules of the city. Pure functions: (state, action) -> (new state, what happened).
 // The LLM only ever proposes an Action; every number below is decided here.
 import { formatClock } from "./clock";
-import { busLink, busOptions, busSpeed, isBus, lineFrom, type BusLine, type BusType, type LineStop } from "./buses";
+import { BUS_TYPES, busLink, busOptions, busSpeed, isBus, lineFrom, type BusLine, type BusType, type LineStop } from "./buses";
 import { ENCOUNTERS, FRIEND, findEncounter, type Kit } from "./encounters";
-import { PLACES, edgeBetween, kmToAirport, pathKm, route, tollOn } from "./map";
+import { PLACES, edgeBetween, kmToAirport, neighbors, pathKm, route, tollOn } from "./map";
+import { describeWallet, payFrom, spendable, totalMoney, type PayBy } from "./money";
 import { between, rngFor, type Rng } from "./rng";
 import {
   AUTO_ASK,
@@ -31,7 +32,7 @@ import {
   TRANSPORT,
   WALK_MIN_PER_KM,
 } from "./rules";
-import type { Action, CityEvent, GameState, ItemId, LocationId, Transport, TurnResult } from "./types";
+import { LOCATION_IDS, type Action, type CityEvent, type GameState, type ItemId, type LocationId, type Transport, type TurnResult } from "./types";
 
 export function newGame(seed: number): GameState {
   return {
@@ -41,6 +42,7 @@ export function newGame(seed: number): GameState {
     minutes: 0,
     battery: START.battery,
     cash: START.cash,
+    upi: START.upi,
     location: START.location,
     inventory: [...START.inventory],
     ride: null,
@@ -97,10 +99,13 @@ export function fixedFare(seed: number, transport: Transport, from: LocationId, 
   return Math.round(meterFare(transport, pathKm(path)) * surge(seed, transport)) + tollOn(path, transport);
 }
 
-function pay(s: GameState, amount: number) {
-  if (amount > s.cash) throw new Error(`Invariant: tried to pay ₹${amount} with ₹${s.cash}`);
-  s.cash -= amount;
+/** Pay, UPI first while the phone works, then cash (app rides: UPI only). Callers check `spendable` first. */
+function pay(s: GameState, amount: number, by: PayBy = "any") {
+  payFrom(s, amount, by);
 }
+
+/** How a transport is paid for: app rides through the app (UPI), the rest by cash or UPI. */
+const payBy = (t: Transport): PayBy => (TRANSPORT[t].needsPhone ? "upi" : "any");
 
 function removeItem(s: GameState, id: ItemId) {
   const i = s.inventory.indexOf(id);
@@ -211,12 +216,14 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
     return;
   }
   const price = fixedFare(s.seed, transport, s.location, dest)!;
-  if (price > s.cash) {
-    ctx.refused.push(`A ${spec.label} from ${short(s.location)} to ${short(dest)} costs ₹${price}. You have ₹${s.cash}.`);
+  if (price > spendable(s, payBy(transport))) {
+    ctx.refused.push(
+      `A ${spec.label} from ${short(s.location)} to ${short(dest)} costs ₹${price}, paid in the app by UPI. You have ₹${spendable(s, "upi")} on UPI.`,
+    );
     ctx.actionMinutes += 2;
     return;
   }
-  pay(s, price);
+  pay(s, price, payBy(transport));
   ctx.facts.push(`You book a ${spec.label} to ${short(dest)} for ₹${price}. It is "2 minutes away" for ${spec.wait} minutes.`);
   startRide(s, ctx, transport, dest, spec.wait);
 }
@@ -273,10 +280,10 @@ function busHire(s: GameState, a: Action, ctx: Ctx) {
     );
     return;
   }
-  const shortBy = link.fare - s.cash;
+  const shortBy = link.fare - spendable(s);
   // A little short? The conductor accepts the samosa for the difference.
   if (shortBy > 0 && shortBy <= SAMOSA_FARE_COVER && s.inventory.includes("samosa")) {
-    const paid = s.cash;
+    const paid = spendable(s);
     pay(s, paid);
     removeItem(s, "samosa");
     s.flags.push("traded:samosa");
@@ -287,7 +294,7 @@ function busHire(s: GameState, a: Action, ctx: Ctx) {
     return;
   }
   if (shortBy > 0) {
-    ctx.refused.push(`The ${line.name} ${label(type)} from ${short(here)} to ${short(dest)} costs ₹${link.fare}. You have ₹${s.cash}.${hints()}`);
+    ctx.refused.push(`The ${line.name} ${label(type)} from ${short(here)} to ${short(dest)} costs ₹${link.fare}. You have ${describeWallet(s)}.${hints()}`);
     ctx.actionMinutes += 2;
     return;
   }
@@ -313,7 +320,7 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
     ctx.actionMinutes += TRANSPORT.auto.wait;
     // If no haggle can ever work, the driver says so, without naming his lowest price.
     const bagValue = s.inventory.reduce((sum, i) => sum + ITEMS[i].dealValue, 0);
-    if (quote.floor > s.cash + bagValue) {
+    if (quote.floor > spendable(s) + bagValue) {
       ctx.facts.push(
         `He glances at your wallet and shakes his head: that is far more than you're carrying, however you bargain. "Go part of the way some other way, sir. Hebbal side. Airport bus comes there."`,
       );
@@ -331,8 +338,8 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
   const missing = a.items.filter((i) => !s.inventory.includes(i));
   if (missing.length) ctx.refused.push(`You don't have a ${itemList(missing)} to offer.`);
   const namedPrice = !a.acceptAsk && !a.offerMeter;
-  if (namedPrice && cashOffer > s.cash) {
-    ctx.refused.push(`You offer ₹${cashOffer}, but you only have ₹${s.cash}.`);
+  if (namedPrice && cashOffer > spendable(s)) {
+    ctx.refused.push(`You offer ₹${cashOffer}, but you only have ${describeWallet(s)}.`);
     return;
   }
   const itemValue = offeredItems.reduce((sum, i) => sum + ITEMS[i].dealValue, 0);
@@ -341,8 +348,8 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
 
   if (cashOffer >= quote.ask || cashOffer + itemValue >= quote.floor) {
     const price = Math.min(cashOffer, quote.ask);
-    if (price > s.cash) {
-      ctx.refused.push(`The driver would go for ₹${price}. You have ₹${s.cash}.`);
+    if (price > spendable(s)) {
+      ctx.refused.push(`The driver would go for ₹${price}. You have ${describeWallet(s)}.`);
       return;
     }
     const takenItems = price < quote.floor ? offeredItems : [];
@@ -421,8 +428,8 @@ function charge(s: GameState, a: Action, ctx: Ctx) {
     return;
   }
   const fee = CHARGING_FEE * place.priceMultiplier;
-  if (fee > s.cash) {
-    ctx.refused.push(`A shop will let you charge for ₹${fee}. You have ₹${s.cash}.`);
+  if (fee > spendable(s)) {
+    ctx.refused.push(`A shop will let you charge for ₹${fee}. You have ${describeWallet(s)}.`);
     return;
   }
   const minutes = clamp(Math.round(a.minutes ?? 10), ...CHARGE_MINUTES);
@@ -453,7 +460,7 @@ function buy(s: GameState, a: Action, ctx: Ctx) {
     const price = item.price * place.priceMultiplier;
     if (!item.buyable) ctx.refused.push(`Nobody sells a ${item.label} here.`);
     else if (s.inventory.length >= MAX_INVENTORY) ctx.refused.push("Your bag is full.");
-    else if (price > s.cash) ctx.refused.push(`A ${item.label} costs ₹${price} here. You have ₹${s.cash}.`);
+    else if (price > spendable(s)) ctx.refused.push(`A ${item.label} costs ₹${price} here. You have ${describeWallet(s)}.`);
     else {
       pay(s, price);
       s.inventory.push(id);
@@ -712,6 +719,41 @@ function diffItems(before: ItemId[], after: ItemId[]): ItemId[] {
   return rest;
 }
 
+/**
+ * The cheapest way to get any closer to the airport from here: a short walk (free), a bus that heads
+ * that way, or an auto to the next place at the driver's best possible price.
+ */
+function cheapestWayOn(s: GameState): number {
+  const here = s.location;
+  const closer = (to: LocationId) => kmToAirport(to) < kmToAirport(here);
+  let best = Infinity;
+  for (const to of neighbors(here).filter(closer)) {
+    const km = edgeBetween(here, to)!.km;
+    if (km <= MAX_WALK_KM) return 0;
+    best = Math.min(best, Math.round(meterFare("auto", km) * AUTO_FLOOR[0]));
+  }
+  for (const to of LOCATION_IDS.filter(closer)) {
+    for (const type of BUS_TYPES) {
+      const link = busLink(here, to, type);
+      if (link) best = Math.min(best, link.fare);
+    }
+  }
+  return best;
+}
+
+/**
+ * Out of money that works and no free way on: the evening is over. A dead phone with UPI money left
+ * isn't stranded if a shop here will charge it for the cash you have.
+ */
+function isStranded(s: GameState): boolean {
+  if (s.ride || s.pending || s.meet || s.location === "airport") return false;
+  const place = PLACES[s.location];
+  const fee = CHARGING_FEE * place.priceMultiplier;
+  let budget = spendable(s) + (s.inventory.includes("samosa") ? SAMOSA_FARE_COVER : 0);
+  if (s.battery === 0 && (s.upi ?? 0) > 0 && place.shops && s.cash >= fee) budget += (s.upi ?? 0) - fee;
+  return budget < cheapestWayOn(s);
+}
+
 /** Give the stretches travelled since the last stamp their arrival time. */
 function stampLegs(s: GameState) {
   if (s.journey?.some((l) => l.at === undefined)) s.journey = s.journey.map((l) => (l.at === undefined ? { ...l, at: s.minutes } : l));
@@ -831,7 +873,12 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
   const drain = Math.floor(s.minutes / BATTERY.drainEvery) - Math.floor(startMinutes / BATTERY.drainEvery);
   const batteryBefore = prev.battery;
   s.battery = clamp(s.battery - ctx.phoneCost - drain + ctx.batteryGain, 0, 100);
-  if (batteryBefore > 0 && s.battery === 0) ctx.facts.push("Your phone dies. No UPI, no apps, no calls.");
+  if (batteryBefore > 0 && s.battery === 0)
+    ctx.facts.push(
+      (s.upi ?? 0) > 0
+        ? `Your phone dies. The ₹${s.upi} on UPI is out of reach until you charge it; you're down to ₹${s.cash} in cash. No apps, no calls.`
+        : "Your phone dies. No UPI, no apps, no calls.",
+    );
   else if (batteryBefore === 0 && s.battery > 0) ctx.facts.push("Your phone flickers back to life.");
   else if (batteryBefore > BATTERY.lowWarning && s.battery <= BATTERY.lowWarning)
     ctx.facts.push(`Low battery warning: ${s.battery}%.`);
@@ -865,6 +912,10 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
         s.location === "airport"
           ? `It's ${formatClock(s.minutes)}. You made it to the airport, but check-in closed at 8:55 PM.`
           : `It's ${formatClock(s.minutes)} and you're still at ${short(s.location)}. Check-in closed at 8:55 PM.`;
+    } else if (isStranded(s)) {
+      s.status = "lost";
+      s.endReason = `Stranded at ${short(s.location)} at ${formatClock(s.minutes)} with ${describeWallet(s)}. Nothing you can pay for gets you any closer to the airport.`;
+      ctx.facts.push(s.endReason);
     }
   }
 
@@ -876,7 +927,7 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
       event,
       delta: {
         minutes: turnMinutes,
-        cash: s.cash - prev.cash,
+        cash: totalMoney(s) - totalMoney(prev),
         battery: s.battery - prev.battery,
         from: prev.location,
         to: s.location,
