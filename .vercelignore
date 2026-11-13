@@ -1,0 +1,8 @@
+# The Vercel CLI uploads the project folder and does not read .gitignore, so list what must stay local.
+.env*
+!.env.example
+.data/
+.claude/
+.next/
+node_modules/
+bmtc.zip

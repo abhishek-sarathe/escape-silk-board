@@ -10,7 +10,7 @@ import EndCard from "./EndCard";
 import Feed, { type Entry } from "./Feed";
 import Hud from "./Hud";
 import { readRecord, saveResult, type PlayerRecord } from "./record";
-import { suggest } from "./suggestions";
+import { mixMoves, suggest } from "./suggestions";
 
 export default function Game() {
   const [state, setState] = useState<PublicState | null>(null);
@@ -23,6 +23,10 @@ export default function Game() {
   const [record, setRecord] = useState<PlayerRecord | null>(null);
   /** The ending card can be closed to read back through the evening, and reopened. */
   const [showEnd, setShowEnd] = useState(true);
+  /** Moves the server worked out from the route planner for this turn. */
+  const [planned, setPlanned] = useState<string[]>([]);
+  /** What the move buttons showed last turn, so this turn can offer something different. */
+  const [lastShown, setLastShown] = useState<string[]>([]);
   const ids = useRef(0);
   const feedEnd = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,6 +42,8 @@ export default function Game() {
       setVia(null);
       setDelta(null);
       setRecord(readRecord());
+      setPlanned(data.suggestions ?? []);
+      setLastShown([]);
       setEntries([{ id: ids.current++, kind: "narrator", text: data.narration, at: 0 }]);
       const url = new URL(window.location.href);
       url.searchParams.set("seed", String(data.state.seed));
@@ -67,6 +73,8 @@ export default function Game() {
     setEntries((prev) => [...prev, entry({ kind: "player", text: said })]);
     try {
       const data = await playTurn(token, said);
+      setLastShown(moves);
+      setPlanned(data.suggestions ?? []);
       setState(data.state);
       setToken(data.token);
       setVia(data.via.narrator);
@@ -87,7 +95,8 @@ export default function Game() {
 
   const over = state && state.status !== "playing";
   const tokens = state ? state.usage.promptTokens + state.usage.completionTokens : 0;
-  const moves = state ? suggest(state) : [];
+  // A waiting decision shows exactly its options; otherwise mix planned moves with fresh local ideas.
+  const moves = !state ? [] : state.pending ? suggest(state) : mixMoves(planned, suggest(state, 8), lastShown);
 
   return (
     <div className="relative flex min-h-dvh flex-col">

@@ -63,7 +63,7 @@ function pick(first: string[], pool: string[], n: number, seed: number): string[
   return [...first, ...rest.slice(0, n)];
 }
 
-export function suggest(s: PublicState): string[] {
+export function suggest(s: PublicState, more = 3): string[] {
   if (s.status !== "playing") return [];
   // The city is asking: the options are the moves.
   if (s.pending) return s.pending.options.map((o) => o.label);
@@ -80,7 +80,7 @@ export function suggest(s: PublicState): string[] {
 
   if (s.ride) {
     const extra = [...RIDING, ...needs, ...(samosa ? ["Eat my cold samosa"] : []), ...(s.meet ? [`Get out at ${s.meet.place.replace("_", " ")}`] : [])];
-    return pick(["Keep going"], extra, 3, seed);
+    return pick(["Keep going"], extra, more, seed);
   }
 
   if (s.quote) {
@@ -95,7 +95,7 @@ export function suggest(s: PublicState): string[] {
         "Walk away and see if he follows",
         phone ? "Forget the auto. Book a bike taxi to Hebbal" : "Forget the auto. Take a BMTC bus to Hebbal",
       ],
-      3,
+      more,
       seed,
     );
   }
@@ -106,9 +106,27 @@ export function suggest(s: PublicState): string[] {
         (m) => !m.toLowerCase().endsWith(`to ${s.location}`), // never "to Hennur" while standing at Hennur
       )
     : [];
-  if (s.turn === 0) return pick(["bhaiya, airport chaloge? meter se."], [...buses, ...apps, ...ASK, "Buy a chai and think about my life"], 3, seed);
+  if (s.turn === 0) return pick(["bhaiya, airport chaloge? meter se."], [...buses, ...apps, ...ASK, "Buy a chai and think about my life"], more, seed);
 
   // The most useful next step first: a real bus from here, else an auto.
   const first = buses.length ? [buses[0]] : ["Find an auto to the airport"];
-  return pick(first, [...needs, ...buses, ...apps, ...ASK, ...FLAVOUR, "Find an auto to the airport"], 3, seed);
+  return pick(first, [...needs, ...buses, ...apps, ...ASK, ...FLAVOUR, "Find an auto to the airport"], more, seed);
+}
+
+/**
+ * The buttons for a turn: up to two real next steps from the server's route planner first, then local
+ * ideas, skipping anything shown last turn so the row changes as the evening does. Falls back to repeats
+ * only when there is nothing new to offer.
+ */
+export function mixMoves(planned: string[], local: string[], lastShown: string[], size = 4): string[] {
+  const seen = new Set(lastShown);
+  const fresh = (m: string) => !seen.has(m);
+  const fromPlan = planned.filter(fresh).slice(0, 2);
+  if (!fromPlan.length && planned.length) fromPlan.push(planned[0]); // the best real move stays on offer
+  const out = [...fromPlan];
+  for (const m of [...local.filter(fresh), ...local]) {
+    if (out.length >= size) break;
+    if (!out.includes(m)) out.push(m);
+  }
+  return out;
 }

@@ -187,8 +187,7 @@ function legs(s: GameState, from: LocationId, to: LocationId): Leg[] {
 type Trip = { legs: Leg[]; fare: number; minutes: number };
 
 /** Best one- and two-leg itineraries, ranked by cost or time. Estimates before rain and city events. */
-function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") {
-  if (to === s.location) return { error: "Already there." };
+function bestTrips(s: GameState, to: LocationId, prefer: "cheapest" | "fastest"): Trip[] {
   const left = minutesLeft(s.minutes);
   const budget = s.cash + (s.inventory.includes("samosa") ? SAMOSA_FARE_COVER : 0);
   const trips: Trip[] = [];
@@ -203,7 +202,13 @@ function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") 
   const inTime = usable.filter((t) => t.minutes <= left);
   const pool = prefer === "cheapest" && inTime.length ? inTime : usable;
   const rank = prefer === "cheapest" ? (t: Trip) => t.fare * 1000 + t.minutes : (t: Trip) => t.minutes * 1000 + t.fare;
-  const best = pool.sort((x, y) => rank(x) - rank(y)).slice(0, 4);
+  return pool.sort((x, y) => rank(x) - rank(y)).slice(0, 4);
+}
+
+function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") {
+  if (to === s.location) return { error: "Already there." };
+  const left = minutesLeft(s.minutes);
+  const best = bestTrips(s, to, prefer);
   return {
     note: "Rough estimates before rain, hold-ups and haggling.",
     cash: s.cash,
@@ -215,6 +220,31 @@ function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") 
       makes_checkin: t.minutes <= left,
     })),
   };
+}
+
+/** A trip's first step, phrased as something the player could type. */
+function moveFor(leg: Leg): string {
+  const to = place(leg.to);
+  if (leg.how === "walk") return `Walk to ${to}`;
+  if (leg.how.startsWith("auto")) return `Find an auto to ${to}`;
+  if (leg.how === TRANSPORT.bike_taxi.label || leg.how === TRANSPORT.cab.label) return `Book a ${leg.how} to ${to} (₹${leg.fare})`;
+  const route = leg.how.split(" (")[0]; // "500-D (BMTC bus)" -> "500-D"
+  return `Take the ${route} to ${to} (₹${leg.fare})`;
+}
+
+/**
+ * Up to three useful next moves for a player standing somewhere (no ride, no decision, no haggle):
+ * the first step of the cheapest and fastest trips to the airport that still make check-in, plus the
+ * best trip that doesn't. Plain code over the real data: no AI, no cost, and always true.
+ */
+export function nextMoves(s: GameState): string[] | undefined {
+  if (s.status !== "playing" || s.pending || s.ride || s.quote || s.location === "airport") return undefined;
+  const moves: string[] = [];
+  for (const prefer of ["cheapest", "fastest"] as const) {
+    for (const trip of bestTrips(s, "airport", prefer).slice(0, 2)) moves.push(moveFor(trip.legs[0]));
+  }
+  const unique = [...new Set(moves)];
+  return unique.length ? unique.slice(0, 3) : undefined;
 }
 
 const asPlace = (v: unknown): LocationId | undefined =>

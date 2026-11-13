@@ -8,6 +8,7 @@
 // only this file needs to change.
 import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
@@ -49,7 +50,10 @@ function open(): DatabaseSync | null {
     const sqlite = process.getBuiltinModule?.("node:sqlite") as typeof import("node:sqlite") | undefined;
     if (!sqlite) throw new Error("node:sqlite is not available in this runtime");
     const { DatabaseSync } = sqlite;
-    const file = process.env.LLM_LOG_DB ?? path.join(process.cwd(), ".data", "llm-calls.sqlite");
+    // On Vercel the app folder is read-only; the function's temp dir is writable (per instance, not durable).
+    const file =
+      process.env.LLM_LOG_DB ??
+      (process.env.VERCEL ? path.join(os.tmpdir(), "llm-calls.sqlite") : path.join(process.cwd(), ".data", "llm-calls.sqlite"));
     fs.mkdirSync(path.dirname(file), { recursive: true });
     db = new DatabaseSync(file);
     db.exec(`

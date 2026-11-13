@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { INTRO } from "@/ai/narrator";
+import { nextMoves } from "@/ai/tools";
 import { newGame } from "@/game/engine";
 import { randomSeed } from "@/game/rng";
 import { toPublic } from "@/game/view";
@@ -10,5 +11,5 @@ export async function POST(request: Request) {
   const requested = Number(body?.seed);
   const seed = Number.isInteger(requested) && requested >= 0 && requested < 1_000_000 ? requested : randomSeed();
   const state = { ...newGame(seed), id: randomUUID() };
-  return Response.json({ state: toPublic(state), token: sealState(state), narration: INTRO });
+  return Response.json({ state: toPublic(state), token: sealState(state), narration: INTRO, suggestions: nextMoves(state) });
 }

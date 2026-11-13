@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { runGameMaster, type GameMasterResult } from "@/ai/gameMaster";
-import { narrate } from "@/ai/narrator";
+import { parseLocally } from "@/ai/localParser";
+import { narrate, plainNarration } from "@/ai/narrator";
+import { nextMoves } from "@/ai/tools";
 import type { LlmUsage } from "@/ai/providers";
 import { interpret } from "@/ai/referee";
 import { resolveTurn } from "@/game/engine";
@@ -15,6 +17,21 @@ import { openState, sealState } from "@/server/stateToken";
 export const maxDuration = 60;
 
 const MAX_INPUT = 280;
+/** Most a turn waits for the AI to read the move, then to tell the story. */
+const READ_BUDGET_MS = 20_000;
+const NARRATE_BUDGET_MS = 12_000;
+
+/** Resolves with `work`, or with `fallback()` if it takes longer than `ms` (a late result is ignored). */
+function withDeadline<T>(work: Promise<T>, ms: number, fallback: () => T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[turn] AI step passed its ${ms} ms budget; answering without it`);
+      resolve(fallback());
+    }, ms);
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+}
 
 const Body = z.object({
   token: z.string().min(16).max(60_000),
@@ -58,14 +75,30 @@ export async function POST(request: Request) {
   // REFEREE_MODE=classic uses the single-call referee; the default is the tool-using Game Master agent.
   // Every LLM call inside is metered against this game and turn (src/server/llmLog.ts).
   const meter = { gameId: state.id ?? `seed-${state.seed}`, seed: state.seed, turn: state.turn + 1 };
+  // Time budgets keep a turn from hanging when a provider is slow: past them the game answers anyway,
+  // with the keyword parser for the move and plain sentences for the story. Totals stay well under maxDuration.
   const { referee, next, outcome, narrator } = await withTurn(meter, async () => {
-    const referee: GameMasterResult =
+    const referee: GameMasterResult = await withDeadline(
       process.env.REFEREE_MODE === "classic"
-        ? { ...(await interpret(state, input)), trace: [], lookups: [], notes: state.notes ?? [] }
-        : await runGameMaster(state, input);
+        ? interpret(state, input).then((r) => ({ ...r, trace: [], lookups: [], notes: state.notes ?? [] }))
+        : runGameMaster(state, input),
+      READ_BUDGET_MS,
+      () => ({
+        action: parseLocally(state, input),
+        via: "keyword-parser (slow AI)",
+        usage: null,
+        trace: [{ tool: "fallback", args: {}, result: "the AI took too long; keyword parser used" }],
+        lookups: [],
+        notes: state.notes ?? [],
+      }),
+    );
     const { state: next, outcome } = resolveTurn(state, referee.action);
     next.notes = referee.notes;
-    const narrator = await narrate(next, input, outcome, referee.lookups);
+    const narrator = await withDeadline(narrate(next, input, outcome, referee.lookups), NARRATE_BUDGET_MS, () => ({
+      text: plainNarration(outcome, next),
+      via: "plain (slow AI)",
+      usage: null,
+    }));
     return { referee, next, outcome, narrator };
   });
 
@@ -80,5 +113,6 @@ export async function POST(request: Request) {
     action: referee.action,
     trace: referee.trace,
     via: { referee: referee.via, narrator: narrator.via },
+    suggestions: nextMoves(next),
   });
 }
