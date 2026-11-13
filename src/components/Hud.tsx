@@ -53,6 +53,29 @@ function Pop({ turn, text, tone }: { turn: number; text: string | null; tone: st
   );
 }
 
+/** A phone battery, drawn like the one in a status bar: outline, cap, and a fill that matches the level. */
+function BatteryIcon({ level }: { level: number }) {
+  const fill = level === 0 ? "bg-transparent" : level <= 10 ? "bg-brake" : level <= 30 ? "bg-sodium" : "bg-go";
+  const frame = level === 0 ? "border-brake" : "border-paper/70";
+  return (
+    <span aria-hidden className="inline-flex shrink-0 items-center">
+      <span className={`relative inline-block h-4 w-7 rounded-[4px] sm:h-[18px] sm:w-9 border-2 p-[2px] ${frame}`}>
+        <span className={`block h-full rounded-[2px] transition-all duration-700 ${fill}`} style={{ width: `${Math.max(level, 0)}%` }} />
+        {level === 0 && <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold leading-none text-brake">✕</span>}
+      </span>
+      <span className={`ml-[1px] h-2 w-[3px] rounded-r-sm ${level === 0 ? "bg-brake" : "bg-paper/70"}`} />
+    </span>
+  );
+}
+
+/** What the battery level means for the player, in a few words. */
+function batteryNote(level: number): string {
+  if (level === 0) return "Dead: no apps";
+  if (level <= 10) return "Charge soon!";
+  if (level <= 30) return "Getting low";
+  return "Apps work";
+}
+
 function Stat({ label, children, sub, tone = "normal", pop, tint }: {
   tint: string;
   label: string;
@@ -63,13 +86,13 @@ function Stat({ label, children, sub, tone = "normal", pop, tint }: {
 }) {
   const color = tone === "critical" ? "text-brake" : tone === "warn" ? "text-sodium" : "text-paper";
   return (
-    <div className={`relative min-w-0 rounded-md px-3 py-2 ${tint}`}>
+    <div className={`relative min-w-0 rounded-md px-2.5 py-2 sm:px-3 ${tint}`}>
       {pop}
       <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{label}</div>
       <div className={`truncate font-mono text-lg tabular-nums leading-tight ${color}`}>
         {children}
       </div>
-      <div className="hidden truncate text-[11px] text-muted sm:block">{sub}</div>
+      <div className="truncate text-[10px] leading-tight text-muted sm:text-[11px]">{sub}</div>
     </div>
   );
 }
@@ -132,30 +155,30 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
           />
         </div>
 
-        <div className="mt-3 grid grid-cols-[1fr_1fr_1.35fr] gap-2">
+        <div className="mt-3 grid grid-cols-[1.15fr_1fr_1.2fr] gap-2">
           <Stat
-            label="⚡ Battery"
-            tint="bg-night text-muted"
+            label="Phone"
+            tint={`bg-night text-muted ${state.battery === 0 ? "ring-1 ring-brake" : state.battery <= 10 ? "ring-1 ring-sodium" : ""}`}
             tone={batteryTone}
-            sub={state.battery > 0 ? "UPI & apps live 🟢" : "Dead: Cash only 📵"}
+            sub={batteryNote(state.battery)}
             pop={<Pop turn={state.turn} text={delta?.battery ? `${delta.battery > 0 ? "+" : "−"}${Math.abs(delta.battery)}%` : null} tone={delta && delta.battery > 0 ? "text-go" : "text-muted"} />}
           >
-            {battery}%
-            <span className="ml-2 hidden h-2 w-10 overflow-hidden rounded-sm bg-line align-middle sm:inline-block lg:hidden">
-              <span className={`block h-full transition-all duration-700 ${state.battery <= 10 ? "bg-brake" : "bg-go"}`} style={{ width: `${state.battery}%` }} />
+            <span className="flex items-center gap-1.5 sm:gap-2" aria-label={`Phone battery ${state.battery}%`}>
+              <BatteryIcon level={battery} />
+              <span className={state.battery <= 10 ? "animate-pulse-soft" : ""}>{battery}%</span>
             </span>
           </Stat>
           <Stat
-            label="💵 Cash"
+            label="Money"
             tint="bg-night text-muted"
             tone={state.cash < 50 ? "warn" : "normal"}
-            sub={state.quote ? `Auto asks ₹${state.quote.ask}` : state.battery > 0 ? "UPI + Cash" : "Cash only"}
+            sub={state.quote ? `Auto asks ₹${state.quote.ask}` : state.cash < 50 ? "Almost broke" : "In your wallet"}
             pop={<Pop turn={state.turn} text={delta?.cash ? `${delta.cash > 0 ? "+" : "−"}₹${Math.abs(delta.cash)}` : null} tone={delta && delta.cash > 0 ? "text-go" : "text-brake"} />}
           >
             ₹{cash}
           </Stat>
-          <Stat label="🎒 Bag" tint="bg-night text-muted" sub={state.raining ? "🌧️ Pouring" : "🌆 Dry evening"}>
-            <span className="text-xs font-semibold leading-tight">{bagSummary(state.inventory)}</span>
+          <Stat label="Bag" tint="bg-night text-muted" sub={state.raining ? "It's raining" : "Dry, for now"}>
+            <span className="block whitespace-normal text-xs font-semibold leading-tight">{bagSummary(state.inventory)}</span>
           </Stat>
         </div>
 
