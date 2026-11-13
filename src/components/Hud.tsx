@@ -177,16 +177,16 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
   const batteryTone = state.battery === 0 ? "critical" : state.battery <= 10 ? "warn" : "normal";
 
   return (
-    <section aria-label="Your situation" className="sticky top-0 z-20 self-start px-3 pt-3 max-lg:w-full">
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border-2 border-line bg-panel p-3 sm:p-4">
+    <section aria-label="Your situation" className="sticky top-0 z-20 self-start px-2 pt-2 max-lg:w-full sm:px-3 sm:pt-3">
+      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border-2 border-line bg-panel p-2.5 sm:p-4">
         {/* The street: a short strip on phones (cropped from the top), the full scene on wide screens. */}
-        <div className="-mx-3 -mt-3 mb-3 h-20 overflow-hidden sm:-mx-4 sm:-mt-4 sm:h-28 lg:h-auto">
+        <div className="-mx-2.5 -mt-2.5 mb-2 h-12 overflow-hidden sm:-mx-4 sm:-mt-4 sm:mb-3 sm:h-24 lg:h-auto">
           <Scene state={state} />
         </div>
         <div className="relative flex items-end justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-              Right now
+              <span className="hidden sm:inline">Right now</span>
               {nudge && (
                 <span
                   key={nudge}
@@ -197,30 +197,30 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
               )}
             </div>
             <div
-              className={`inline-block origin-bottom-left whitespace-nowrap font-display text-4xl tabular-nums leading-none sm:text-5xl lg:text-4xl ${clockColor} ${urgent ? "animate-nudge" : ""}`}
+              className={`inline-block origin-bottom-left whitespace-nowrap font-display text-[28px] tabular-nums leading-none sm:text-5xl lg:text-4xl ${clockColor} ${urgent ? "animate-nudge" : ""}`}
             >
               {formatClock(minutes)}
             </div>
           </div>
           <div className="relative text-right">
             <Pop turn={state.turn} text={delta ? `+${delta.minutes} min gone` : null} tone="text-sodium" />
-            <div className={`font-mono text-xl tabular-nums leading-none sm:text-2xl ${clockColor}`}>
+            <div className={`whitespace-nowrap font-mono text-base tabular-nums leading-none sm:text-2xl ${clockColor}`}>
               {left > 0 ? formatDuration(left) : "Closed"}
+              {left > 0 && <span className="text-xs text-muted sm:hidden"> left</span>}
             </div>
-            <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">until check-in closes</div>
+            <div className="mt-1 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-muted sm:block">until check-in closes</div>
           </div>
         </div>
 
         {/* The fuse: how much of the evening is left. */}
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-night" aria-hidden>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-night sm:mt-3" aria-hidden>
           <div
             className={`h-full rounded-full transition-all duration-700 ease-out ${fuse}`}
             style={{ width: `${Math.max(0, Math.min(100, (100 * left) / CHECKIN_CLOSES))}%` }}
           />
         </div>
 
-        {compact ? (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className={`mt-2 flex-wrap items-center gap-1.5 sm:mt-3 ${compact ? "flex" : "flex sm:hidden"}`}>
             <Chip
               label={`Phone battery ${state.battery}%. ${batteryNote(state.battery)}`}
               tone={batteryTone}
@@ -245,8 +245,8 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
             {state.quote && <span className="font-mono text-[11px] text-muted">Auto asks ₹{state.quote.ask}</span>}
             {state.raining && <span aria-label="Raining">🌧️</span>}
           </div>
-        ) : (
-        <div className="mt-3 grid grid-cols-[1.15fr_1fr_1.2fr] gap-2">
+        {!compact && (
+        <div className="mt-3 hidden grid-cols-[1.15fr_1fr_1.2fr] gap-2 sm:grid">
           <Stat
             label="Phone"
             tint={`bg-night text-muted ${state.battery === 0 ? "ring-1 ring-brake" : state.battery <= 10 ? "ring-1 ring-sodium" : ""}`}
@@ -275,7 +275,7 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
         </div>
         )}
 
-        <div className="mt-2 flex items-center justify-between gap-3">
+        <div className="mt-2 hidden items-center justify-between gap-3 sm:flex">
           <p className="min-w-0 truncate text-xs text-muted">
             <span className="text-paper">{PLACES[state.location].name}</span>
             {state.ride && (
@@ -287,14 +287,6 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
           <div className="flex shrink-0 gap-1.5">
           <button
             type="button"
-            aria-expanded={showMap}
-            onClick={toggleMap}
-            className="shrink-0 rounded-md border border-sodium/60 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-sodium hover:bg-sodium hover:text-night"
-          >
-            {showMap ? "Hide map" : "Map"}
-          </button>
-          <button
-            type="button"
             aria-pressed={compact}
             onClick={toggleCompact}
             className="shrink-0 rounded-md border border-line px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-paper"
@@ -304,8 +296,8 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
           </div>
         </div>
         {/* The signature. On by default; the player can fold it away to give the story more room. */}
-        <div className={`mt-2 ${showMap ? "" : "hidden"}`}>
-          <BengaluruMap state={state} onMove={onMove} />
+        <div className="mt-2">
+          <BengaluruMap state={state} onMove={onMove} collapsed={!showMap} onToggle={toggleMap} />
         </div>
       </div>
     </section>

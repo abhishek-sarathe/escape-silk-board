@@ -126,7 +126,7 @@ function Changes({ outcome }: { outcome: Outcome }) {
 export default function Feed({ entries, busy }: { entries: Entry[]; busy: boolean }) {
   const lastId = entries[entries.length - 1]?.id;
   return (
-    <ol className="space-y-6 py-6" aria-live="polite">
+    <ol className="space-y-3 py-3 sm:space-y-6 sm:py-6" aria-live="polite">
       {entries.map((e) => {
         if (e.kind === "player") {
           return (
@@ -149,8 +149,8 @@ export default function Feed({ entries, busy }: { entries: Entry[]; busy: boolea
           );
         }
         return (
-          <li key={e.id} className="animate-rise rounded-xl bg-panel/40 p-4 ring-1 ring-white/5">
-            <div className="mb-2 flex items-center justify-between">
+          <li key={e.id} className="animate-rise rounded-xl bg-panel/40 p-3 ring-1 ring-white/5 sm:p-4">
+            <div className="mb-1 flex items-center justify-between sm:mb-2">
               <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-sodium">
                 <span>🎙️</span>
                 <span>NARRATOR</span>
@@ -161,7 +161,7 @@ export default function Feed({ entries, busy }: { entries: Entry[]; busy: boolea
                 </span>
               )}
             </div>
-            <p className="text-[16px] leading-relaxed text-paper">
+            <p className="text-[15px] leading-relaxed text-paper sm:text-[16px]">
               <Typed text={e.text} animate={e.id === lastId} />
             </p>
             {e.outcome && <Changes outcome={e.outcome} />}

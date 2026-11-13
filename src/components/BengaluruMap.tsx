@@ -120,12 +120,17 @@ export function BengaluruMap({
   state,
   variant = "live",
   onMove,
+  collapsed = false,
+  onToggle,
 }: {
   state: PublicState;
   /** "ending": the whole evening, no live controls (used on the end card). */
   variant?: "live" | "ending";
   /** Lets a bus chip be tapped to take that bus. */
   onMove?: (text: string) => void;
+  /** Folded: only the one-line strip shows. */
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
   const here = state.location;
   const playing = state.status === "playing" && variant === "live";
@@ -163,7 +168,7 @@ export function BengaluruMap({
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-line bg-panel">
-      <div className="relative">
+      <div className={`relative ${collapsed ? "hidden" : ""}`}>
         <svg
           viewBox="0 0 800 290"
           role="img"
@@ -288,18 +293,33 @@ export function BengaluruMap({
 
       </div>
 
-      {/* ETA strip under the map (an overlay would cover Silk Board and the centre on small screens). */}
-      {eta && variant === "live" && state.status === "playing" && (
-        <div className="flex items-baseline gap-1.5 border-t border-line bg-panel px-3 py-1.5 font-mono text-[11px] text-paper">
-          <span className="truncate text-muted">{eta.label}</span>
-          <span className="font-bold text-go">{eta.minutes} min</span>
-          <span className="text-muted">· ETA {formatClock(state.minutes + eta.minutes)}</span>
-          <span className={`ml-auto shrink-0 font-semibold ${eta.toll ? "text-sodium" : "text-muted"}`}>{eta.toll ? `₹${eta.toll} toll` : "No toll"}</span>
+      {/* One line under the map: the time to where you're going, the toll, and the fold button. */}
+      {variant === "live" && (
+        <div className={`flex items-center gap-2 whitespace-nowrap bg-panel px-3 py-1.5 font-mono text-[11px] text-paper ${collapsed ? "" : "border-t border-line"}`}>
+          {eta && state.status === "playing" ? (
+            <>
+              <span className="min-w-0 truncate text-muted">{eta.label}</span>
+              <span className="font-bold text-go">{eta.minutes} min</span>
+              <span className={`shrink-0 ${eta.toll ? "font-semibold text-sodium" : "text-muted"}`}>· {eta.toll ? `₹${eta.toll} toll` : "no toll"}</span>
+            </>
+          ) : (
+            <span className="min-w-0 truncate text-muted">Your route tonight</span>
+          )}
+          {onToggle && (
+            <button
+              type="button"
+              aria-expanded={!collapsed}
+              onClick={onToggle}
+              className="ml-auto shrink-0 rounded border border-line px-2 py-0.5 font-semibold uppercase text-sodium hover:bg-line"
+            >
+              {collapsed ? "Map ▾" : "Hide ▴"}
+            </button>
+          )}
         </div>
       )}
 
       {/* Legend: only the ways you've actually travelled tonight. */}
-      {modesUsed.length > 0 && (
+      {!collapsed && modesUsed.length > 0 && (
         <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-line px-3 py-1.5 font-mono text-[10px] uppercase text-muted">
           {modesUsed.map((m) => (
             <span key={m} className="inline-flex items-center gap-1.5">
@@ -312,7 +332,7 @@ export function BengaluruMap({
       )}
 
       {/* Live: the real buses you could board right here (tap one to take it). */}
-      {buses.length > 0 && (
+      {!collapsed && buses.length > 0 && (
         <div className="hidden flex-wrap items-center gap-1.5 border-t border-line px-3 py-2 text-[11px] sm:flex">
           <span className="font-mono uppercase text-muted">Buses from here:</span>
           {buses.map((b) => (
