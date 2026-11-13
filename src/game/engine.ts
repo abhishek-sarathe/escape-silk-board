@@ -16,6 +16,7 @@ import {
   ITEMS,
   MAX_EVENTS,
   MAX_INVENTORY,
+  MAX_WALK_KM,
   NO_PHONE_CHECKIN_PENALTY,
   RAIN,
   START,
@@ -259,21 +260,28 @@ function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, p
 }
 
 function walk(s: GameState, a: Action, ctx: Ctx) {
+  const dest = a.destination ?? "airport";
+  const from = s.location;
+  const next = dest === from ? null : route(from, dest, "walk")![1];
+  const edge = next ? edgeBetween(from, next)! : null;
+  const soaked = s.raining && !s.inventory.includes("umbrella");
+  const minutes = edge ? Math.round(edge.km * WALK_MIN_PER_KM * (soaked ? RAIN.walk : 1)) : 0;
+
+  // Checked before anything moves: one misread "run to the counter" shouldn't start a game-ending walk.
+  if (next && edge && edge.km > MAX_WALK_KM) {
+    ctx.refused.push(`${short(next)} is ${edge.km} km away: ${minutes} minutes on foot. You'll need a ride.`);
+    ctx.actionMinutes += 2;
+    return;
+  }
   if (s.ride) {
     ctx.facts.push(`You get out of the ${label(s.ride.transport)}.`);
     s.ride = null;
   }
-  const dest = a.destination ?? "airport";
-  if (dest === s.location) {
+  if (!next || !edge) {
     ctx.refused.push(`You're already at ${short(dest)}.`);
     ctx.actionMinutes += 1;
     return;
   }
-  const from = s.location;
-  const next = route(from, dest, "walk")![1];
-  const edge = edgeBetween(from, next)!;
-  const soaked = s.raining && !s.inventory.includes("umbrella");
-  const minutes = Math.round(edge.km * WALK_MIN_PER_KM * (soaked ? RAIN.walk : 1));
   moveTo(s, next);
   ctx.actionMinutes += minutes;
   ctx.facts.push(`You walk ${edge.km} km from ${short(from)} to ${short(next)}${soaked ? ", getting soaked" : ""}: ${minutes} minutes.`);

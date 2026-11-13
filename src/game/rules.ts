@@ -39,6 +39,8 @@ export const AUTO_FLOOR: [number, number] = [1.05, 1.25];
 export const AUTO_PATIENCE: [number, number] = [2, 3];
 
 export const WALK_MIN_PER_KM = 12;
+/** Longer stretches are refused: no stretch over this can be walked in time to make the flight. */
+export const MAX_WALK_KM = 4;
 
 export const RAIN = { road: 1.25, bike: 1.6, walk: 1.4 };
 

@@ -84,6 +84,25 @@ describe("travel", () => {
     expect(next.state.location).not.toBe(booked.state.location);
   });
 
+  it("refuses a long walk, so one misread move can't end the game", () => {
+    const s = { ...newGame(13), location: "hebbal" as const, visited: ["hebbal" as const] };
+    const { state, outcome } = resolveTurn(s, act({ kind: "walk", destination: "airport" }));
+    expect(state).toMatchObject({ location: "hebbal", status: "playing" });
+    expect(state.minutes).toBeLessThan(5);
+    expect(outcome.refused[0]).toMatch(/10 km away/);
+  });
+
+  it("a refused walk doesn't throw you out of your ride", () => {
+    const s = { ...newGame(14), location: "mg_road" as const, ride: { transport: "auto" as const, destination: "hebbal" as const } };
+    const { state } = resolveTurn(s, act({ kind: "walk", destination: "hebbal" }));
+    expect(state.location).toBe("hebbal"); // the auto kept going
+  });
+
+  it("still lets you walk a short stretch", () => {
+    const { state } = resolveTurn(newGame(15), act({ kind: "walk", destination: "hsr" }));
+    expect(state.location).toBe("hsr");
+  });
+
   it("airport buses don't stop in Koramangala", () => {
     const s = { ...newGame(12), location: "koramangala" as const, visited: ["koramangala" as const] };
     const { state, outcome } = resolveTurn(s, act({ kind: "hire", transport: "bus", destination: "airport" }));
