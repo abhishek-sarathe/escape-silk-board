@@ -1,8 +1,8 @@
 "use client";
 
-// The game's signature: a live route map of the evening, drawn like a phone maps app (light land,
-// white streets, yellow highways, coloured route lines with a white casing, a blue "you are here" dot,
-// a red pin on the airport). It draws the engine's real road graph (EDGES) with each road's 7 PM time and
+// The game's signature: a live route map of the evening, in the game's own night look: dark land,
+// lit streets, amber highways, route lines in each vehicle's colour, an auto-yellow "you are here" dot
+// and a green airport. It draws the engine's real road graph (EDGES) with each road's 7 PM time and
 // toll, then the journey the engine recorded, the ride still ahead, and a pin wherever the city threw
 // something at you. At the end it is the ending: the whole evening on one map. Reads state only.
 import { formatClock } from "@/game/clock";
@@ -30,14 +30,14 @@ type Mode = Transport | "walk";
 
 /** How you travelled, as a route line. Real-world colours: auto yellow-green, BMTC red, Vajra blue. */
 const MODE: Record<Mode, { color: string; label: string; icon: string; dotted?: boolean }> = {
-  walk: { color: "#1a73e8", label: "Walk", icon: "🚶", dotted: true },
-  auto: { color: "#2e9e4f", label: "Auto", icon: "🛺" },
-  cab: { color: "#1a73e8", label: "Cab", icon: "🚕" },
-  bike_taxi: { color: "#f29900", label: "Bike taxi", icon: "🛵" },
-  bus: { color: "#d93025", label: "BMTC bus", icon: "🚌" },
-  ac_bus: { color: "#1967d2", label: "Vajra AC", icon: "🚌" },
-  airport_bus: { color: "#1967d2", label: "Vayu Vajra", icon: "🚍" },
-  lift: { color: "#9334e6", label: "A stranger's car", icon: "🚗" },
+  walk: { color: "#c3c8cf", label: "Walk", icon: "🚶", dotted: true },
+  auto: { color: "#3ecf8e", label: "Auto", icon: "🛺" },
+  cab: { color: "#ece8e1", label: "Cab", icon: "🚕" },
+  bike_taxi: { color: "#ff9f43", label: "Bike taxi", icon: "🛵" },
+  bus: { color: "#ff5a4f", label: "BMTC bus", icon: "🚌" },
+  ac_bus: { color: "#4aa8ff", label: "Vajra AC", icon: "🚌" },
+  airport_bus: { color: "#4aa8ff", label: "Vayu Vajra", icon: "🚍" },
+  lift: { color: "#c084fc", label: "A stranger's car", icon: "🚗" },
 };
 
 /** What each happening looks like as a pin. */
@@ -56,16 +56,19 @@ const PIN: Record<string, string> = {
   "decision:friend": "📞",
 };
 
-// Maps-app palette (light, fixed: it is a printed map inside the dark game).
-const LAND = "#f1f3f4";
-const STREET = "#ffffff";
-const STREET_CASE = "#dadce0";
-const HIGHWAY = "#fde293";
-const HIGHWAY_CASE = "#f2c94c";
-const WATER = "#aadaff";
-const PARK = "#c8e6c9";
-const INK = "#3c4043";
-const INK_SOFT = "#70757a";
+// Night palette, from the game's own colours (night, panel, line, paper, sodium).
+const LAND = "#101318";
+const STREET = "#2a3039";
+const STREET_CASE = "#181c22";
+const HIGHWAY = "#4d4122";
+const HIGHWAY_CASE = "#2a2414";
+const WATER = "#10283a";
+const PARK = "#132219";
+const INK = "#ece8e1";
+const INK_SOFT = "#8b919b";
+const HALO = "#101318";
+const SODIUM = "#ffcf33";
+const GO = "#3ecf8e";
 
 const xy = (id: LocationId) => AT[id];
 const seg = (a: LocationId, b: LocationId) => ({ x1: AT[a].x, y1: AT[a].y, x2: AT[b].x, y2: AT[b].y });
@@ -101,12 +104,12 @@ const pathMinutes = (path: LocationId[]) => path.slice(1).reduce((sum, to, i) =>
 /** A rounded label on a road, like a maps app's time bubble. */
 function Pill({ x, y, text, tone }: { x: number; y: number; text: string; tone: "plain" | "route" | "toll" }) {
   const w = text.length * 10.5 + 18;
-  const fill = tone === "route" ? "#1a73e8" : tone === "toll" ? "#fef7e0" : "#ffffff";
-  const ink = tone === "route" ? "#ffffff" : tone === "toll" ? "#b06000" : INK;
+  const fill = tone === "route" ? SODIUM : tone === "toll" ? "#2a2414" : "#1b1f25";
+  const ink = tone === "route" ? "#0b0d10" : tone === "toll" ? SODIUM : INK;
   return (
     <g transform={`translate(${x}, ${y})`}>
-      <rect x={-w / 2} y={-14} width={w} height={28} rx={14} fill={fill} stroke={tone === "toll" ? "#f2c94c" : "#dadce0"} strokeWidth={1.5} />
-      <text textAnchor="middle" y={6} fontSize={17} fontWeight={600} fill={ink}>
+      <rect x={-w / 2} y={-14} width={w} height={28} rx={14} fill={fill} stroke={tone === "toll" ? "#7a6420" : tone === "route" ? SODIUM : "#2f353e"} strokeWidth={1.5} />
+      <text textAnchor="middle" y={6} fontSize={17} fontWeight={700} fill={ink} className="font-mono">
         {text}
       </text>
     </g>
@@ -173,7 +176,7 @@ export function BengaluruMap({
           <ellipse cx="236" cy="190" rx="14" ry="9" fill={WATER} /> {/* Agara Lake */}
           <ellipse cx="430" cy="98" rx="22" ry="11" fill={WATER} /> {/* Hebbal Lake */}
           <rect x="262" y="96" width="44" height="26" rx="10" fill={PARK} /> {/* Cubbon Park */}
-          <rect x="680" y="104" width="100" height="88" rx="18" fill="#e8eaed" /> {/* the airfield */}
+          <rect x="680" y="104" width="100" height="88" rx="18" fill="#161a20" /> {/* the airfield */}
 
           {/* Every road the engine knows: casing, then fill. Highways yellow, like a maps app. */}
           {EDGES.map((e) => (
@@ -187,7 +190,7 @@ export function BengaluruMap({
           {ahead.slice(1).map((to, i) => (
             <g key={`ahead-${ahead[i]}-${to}`}>
               <line {...seg(ahead[i], to)} stroke={MODE[rideMode ?? "walk"].color} strokeOpacity={0.35} strokeWidth={9} strokeLinecap="round" />
-              <line {...seg(ahead[i], to)} stroke="#ffffff" strokeWidth={3} strokeDasharray="1 12" strokeLinecap="round" className="scene-dash-slow" />
+              <line {...seg(ahead[i], to)} stroke="#ece8e1" strokeOpacity={0.7} strokeWidth={3} strokeDasharray="1 12" strokeLinecap="round" className="scene-dash-slow" />
             </g>
           ))}
 
@@ -202,7 +205,7 @@ export function BengaluruMap({
                   <line {...seg(l.from, l.to)} stroke={m.color} strokeWidth={7} strokeDasharray="0.1 13" strokeLinecap="round" />
                 ) : (
                   <>
-                    <line {...seg(l.from, l.to)} stroke="#ffffff" strokeWidth={13} strokeLinecap="round" />
+                    <line {...seg(l.from, l.to)} stroke="#0b0d10" strokeWidth={13} strokeLinecap="round" />
                     <line {...seg(l.from, l.to)} stroke={m.color} strokeWidth={8} strokeLinecap="round" pathLength={1} className={fresh ? "animate-draw" : ""} />
                   </>
                 )}
@@ -225,15 +228,15 @@ export function BengaluruMap({
             if (id === "airport") return null;
             const seen = state.visited.includes(id);
             const t = arrived.get(id);
-            const labelProps = { x: p.lx, textAnchor: p.anchor, stroke: "#ffffff", strokeWidth: 5, paintOrder: "stroke" as const, strokeLinejoin: "round" as const };
+            const labelProps = { x: p.lx, textAnchor: p.anchor, stroke: HALO, strokeWidth: 5, paintOrder: "stroke" as const, strokeLinejoin: "round" as const };
             return (
               <g key={id}>
-                <circle cx={p.x} cy={p.y} r={7} fill="#ffffff" stroke={seen ? INK : "#9aa0a6"} strokeWidth={3} />
-                <text {...labelProps} y={p.ly} fontSize={21} fontWeight={id === here ? 700 : 500} fill={seen || id === here ? INK : INK_SOFT}>
+                <circle cx={p.x} cy={p.y} r={7} fill={seen ? INK : "#101318"} stroke={seen ? INK : "#5b616b"} strokeWidth={3} />
+                <text {...labelProps} y={p.ly} fontSize={19} fontWeight={id === here ? 700 : 500} fill={seen || id === here ? INK : INK_SOFT} className="font-mono uppercase">
                   {short(id)}
                 </text>
                 {t !== undefined && id !== state.visited[0] && (
-                  <text {...labelProps} y={p.ly + (p.ly < p.y ? -20 : 20)} fontSize={16} fontWeight={600} fill="#1a73e8">
+                  <text {...labelProps} y={p.ly + (p.ly < p.y ? -20 : 20)} fontSize={16} fontWeight={700} fill={SODIUM} className="font-mono">
                     {formatClock(t)}
                   </text>
                 )}
@@ -241,13 +244,14 @@ export function BengaluruMap({
             );
           })}
 
-          {/* The airport: a red map pin. */}
+          {/* The airport: the goal, in "go" green. */}
           <g transform={`translate(${xy("airport").x}, ${xy("airport").y})`}>
-            <path d="M0 0 C -14 -18 -16 -24 -16 -32 A 16 16 0 1 1 16 -32 C 16 -24 14 -18 0 0 Z" fill="#ea4335" stroke="#b31412" strokeWidth={1.5} />
-            <text y={-26} textAnchor="middle" fontSize={15}>
+            <circle r={24} fill={GO} fillOpacity={0.15} />
+            <circle r={15} fill={GO} stroke="#0b0d10" strokeWidth={3} />
+            <text y={6} textAnchor="middle" fontSize={16} fill="#0b0d10">
               ✈
             </text>
-            <text y={48} textAnchor="middle" fontSize={21} fontWeight={700} fill={INK} stroke="#ffffff" strokeWidth={5} paintOrder="stroke">
+            <text y={46} textAnchor="middle" fontSize={19} fontWeight={700} fill={GO} stroke={HALO} strokeWidth={5} paintOrder="stroke" className="font-mono uppercase">
               KIA T2
             </text>
           </g>
@@ -256,7 +260,7 @@ export function BengaluruMap({
           {[...pinsAt].map(([place, list]) =>
             list.map((m, i) => (
               <g key={`${m.id}-${m.minutes}`} transform={`translate(${xy(place).x + 20 + i * 28}, ${xy(place).y - 26})`} className="animate-rise">
-                <circle r={14} fill="#ffffff" stroke="#dadce0" strokeWidth={1.5} />
+                <circle r={14} fill="#1b1f25" stroke={SODIUM} strokeOpacity={0.6} strokeWidth={1.5} />
                 <text textAnchor="middle" y={5} fontSize={15}>
                   {PIN[m.id] ?? "❗"}
                 </text>
@@ -267,8 +271,8 @@ export function BengaluruMap({
 
           {/* You: the blue dot, with your vehicle beside it while riding. */}
           <g style={{ transform: `translate(${xy(here).x}px, ${xy(here).y}px)` }} className="transition-transform duration-700 ease-out">
-            {playing && <circle r={24} fill="#4285f4" fillOpacity={0.18} className="animate-pulse-soft" />}
-            <circle r={11} fill={state.status === "lost" ? "#ea4335" : "#4285f4"} stroke="#ffffff" strokeWidth={4} />
+            {playing && <circle r={24} fill={SODIUM} fillOpacity={0.2} className="animate-pulse-soft" />}
+            <circle r={11} fill={state.status === "lost" ? "#ff5a4f" : SODIUM} stroke="#0b0d10" strokeWidth={4} />
             {state.ride && (
               <text x={16} y={-12} fontSize={20} className={playing ? "scene-bob" : ""}>
                 {MODE[state.ride.transport].icon}
@@ -286,11 +290,11 @@ export function BengaluruMap({
 
       {/* ETA strip under the map (an overlay would cover Silk Board and the centre on small screens). */}
       {eta && variant === "live" && state.status === "playing" && (
-        <div className="flex items-baseline gap-1.5 border-t border-line bg-white px-3 py-1.5 text-[11px] text-[#3c4043]">
-          <span className="truncate font-medium text-[#70757a]">{eta.label}</span>
-          <span className="font-bold text-[#1e8e3e]">{eta.minutes} min</span>
-          <span className="text-[#70757a]">· ETA {formatClock(state.minutes + eta.minutes)}</span>
-          <span className={`ml-auto shrink-0 font-semibold ${eta.toll ? "text-[#b06000]" : "text-[#70757a]"}`}>{eta.toll ? `₹${eta.toll} toll` : "No toll"}</span>
+        <div className="flex items-baseline gap-1.5 border-t border-line bg-panel px-3 py-1.5 font-mono text-[11px] text-paper">
+          <span className="truncate text-muted">{eta.label}</span>
+          <span className="font-bold text-go">{eta.minutes} min</span>
+          <span className="text-muted">· ETA {formatClock(state.minutes + eta.minutes)}</span>
+          <span className={`ml-auto shrink-0 font-semibold ${eta.toll ? "text-sodium" : "text-muted"}`}>{eta.toll ? `₹${eta.toll} toll` : "No toll"}</span>
         </div>
       )}
 
@@ -317,8 +321,8 @@ export function BengaluruMap({
               type="button"
               disabled={!onMove}
               onClick={() => onMove?.(`Take the ${b.line} to ${short(b.to)}`)}
-              className="rounded-md px-2 py-0.5 font-mono font-semibold text-white transition hover:brightness-110 disabled:cursor-default"
-              style={{ background: MODE[b.mode].color }}
+              className="rounded-md border bg-night px-2 py-0.5 font-mono font-semibold transition hover:bg-line disabled:cursor-default"
+              style={{ borderColor: MODE[b.mode].color, color: MODE[b.mode].color }}
             >
               {b.line} → {short(b.to)} ₹{b.fare}
             </button>
