@@ -44,7 +44,7 @@ Two routes north, both through Hebbal: the Outer Ring Road (longer, has airport 
 
 ## Models and cost
 
-- Default: Groq `llama-3.3-70b-versatile` (free tier), with OpenRouter as a paid fallback. Set `LLM_PROVIDERS=openrouter,groq` to swap the order.
+- Default (Groq free tier): `qwen/qwen3.8-27b` narrates and `openai/gpt-oss-120b` referees. Groq rate-limits each model separately, so splitting them doubles the free budget. OpenRouter is the paid fallback; set `LLM_PROVIDERS=openrouter,groq` to swap the order.
 - Each turn makes two calls (referee + narrator). The footer shows tokens used this playthrough, plus the real USD cost when OpenRouter is answering.
 
 ## Deploy (Vercel)
