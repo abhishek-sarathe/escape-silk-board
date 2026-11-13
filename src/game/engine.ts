@@ -228,6 +228,21 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
   startRide(s, ctx, transport, dest, spec.wait);
 }
 
+/**
+ * BMTC timetables are a rumour: tonight's wait is anywhere from a third of the usual to more than double
+ * (seeded, so retrying the same move doesn't re-roll it).
+ */
+function busWait(s: GameState, usual: number): number {
+  const roll = rngFor(s.seed, s.turn, "buswait")();
+  return Math.max(1, Math.round(usual * (roll < 0.25 ? 0.3 : roll < 0.75 ? 0.6 + roll : 2.2)));
+}
+
+function waitStory(wait: number, usual: number, line: string): string {
+  if (wait <= Math.max(1, usual * 0.4)) return `The ${line} pulls up just as you reach the stop: ${wait} minute${wait > 1 ? "s" : ""}.`;
+  if (wait >= usual * 2) return `${wait} minutes of nothing. Then three ${line}s arrive together.`;
+  return `You wait ${wait} minutes for the ${line}.`;
+}
+
 const describeBus = (o: LineStop) => `${o.line.name} (${label(o.type)}) to ${short(o.to)}, ₹${o.link.fare}`;
 
 /** Real BMTC buses: only lines that actually run from here to there, at their real fares. */
@@ -299,8 +314,9 @@ function busHire(s: GameState, a: Action, ctx: Ctx) {
     return;
   }
   pay(s, link.fare);
-  ctx.facts.push(`You wait ${link.wait} minutes and board ${which}, a ${label(type)} towards ${short(dest)}. Ticket: ₹${link.fare}.`);
-  startRide(s, ctx, type, dest, link.wait, line);
+  const wait = busWait(s, link.wait);
+  ctx.facts.push(`${waitStory(wait, link.wait, line.name)} You board ${which}, a ${label(type)} towards ${short(dest)}. Ticket: ₹${link.fare}.`);
+  startRide(s, ctx, type, dest, wait, line);
 }
 
 function haggle(s: GameState, a: Action, ctx: Ctx, rng: Rng, dest: LocationId, path: LocationId[]) {

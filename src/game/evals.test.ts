@@ -4,7 +4,7 @@ import { blankAction, parseLocally } from "@/ai/localParser";
 import { normalise } from "@/ai/referee";
 import { newGame, resolveTurn } from "./engine";
 import { CHECKIN_CLOSES } from "./rules";
-import type { Action } from "./types";
+import type { Action, GameState } from "./types";
 
 const act = (partial: Partial<Action>): Action => ({ ...blankAction("test"), ...partial });
 
@@ -167,35 +167,23 @@ describe("Evals Suite: Core Game Dimensions", () => {
   });
 
   describe("Dimension 5: Full Playthrough Feasibility (Winning Path Eval)", () => {
-    it("eval: smart multi-modal transit (Bike Taxi to Hebbal -> Airport Bus -> Check-in) wins before 8:55 PM", () => {
-      let s = newGame(99);
-
-      // Step 1: Book Bike Taxi to Hebbal (fastest way across town)
-      let r = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" }));
-      s = r.state;
-
-      // Ride until dropped at Hebbal
-      while (s.ride && s.status === "playing") {
-        r = resolveTurn(s, act({ kind: "continue" }));
-        s = r.state;
+    it("eval: smart multi-modal transit (Bike Taxi to Hebbal -> ₹40 bus) wins often, and every win is on time", () => {
+      // Bus waits and BMTC surprises vary by evening, so judge the plan across many evenings, not one.
+      const ride = (s: GameState) => {
+        while ((s.ride || s.pending) && s.status === "playing") s = resolveTurn(s, act({ kind: "continue" })).state;
+        return s;
+      };
+      let wins = 0;
+      for (let seed = 0; seed < 40; seed++) {
+        let s = ride(resolveTurn(newGame(seed), act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" })).state);
+        if (s.status === "playing" && s.location === "hebbal") s = ride(resolveTurn(s, act({ kind: "hire", transport: "bus", destination: "airport" })).state);
+        if (s.status === "won") {
+          wins++;
+          expect(s.location).toBe("airport");
+          expect(s.minutes).toBeLessThanOrEqual(CHECKIN_CLOSES);
+        }
       }
-
-      expect(s.location).toBe("hebbal");
-      expect(s.status).toBe("playing");
-
-      // Step 2: From Hebbal, switch to Airport Bus
-      r = resolveTurn(s, act({ kind: "hire", transport: "bus", destination: "airport" }));
-      s = r.state;
-
-      while (s.ride && s.status === "playing") {
-        r = resolveTurn(s, act({ kind: "continue" }));
-        s = r.state;
-      }
-
-      // Step 3: arriving at departures runs you into the check-in queue in the same turn.
-      expect(s.location).toBe("airport");
-      expect(s.status).toBe("won");
-      expect(s.minutes).toBeLessThanOrEqual(CHECKIN_CLOSES);
+      expect(wins).toBeGreaterThan(15); // ~19/40 taking every default answer; sensible answers win ~75% (balance.ts)
     });
 
     it("eval: arriving with a minute left wins; arriving after 8:55 PM loses", () => {

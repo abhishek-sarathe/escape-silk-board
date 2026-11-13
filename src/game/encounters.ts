@@ -174,6 +174,90 @@ export const ENCOUNTERS: EncounterSpec[] = [
       }
     },
   },
+  // --- BMTC chaos: the bus is never just a bus. ---
+  {
+    id: "depot",
+    canHappen: (s) => isBus(s.ride?.transport) && s.ride?.transport !== "airport_bus" && stopsLeft(s) >= 2,
+    offer: (s) => ({
+      prompt: `At ${short(s.location)} the conductor stands up and announces: "Last stop! Depot! Everybody down!" The board in the window still says ${short(s.ride!.destination)}.`,
+      options: [
+        { key: "argue", label: `Argue: "It says ${short(s.ride!.destination)} on the board!"` },
+        { key: "next_bus", label: "Wait for the next one (~12 min, same ticket)" },
+        { key: "get_off", label: "Get off and find another way" },
+      ],
+      fallback: "next_bus",
+    }),
+    resolve: (s, key, k) => {
+      if (key === "argue") {
+        k.minutes(3);
+        if (k.rng() < 0.45) return k.fact("Half the bus joins in. The driver wants his dinner too, and gives up: the bus carries on.");
+        s.ride = null;
+        return k.fact(`The conductor points at the depot gate and the conversation is over. You're on the pavement at ${short(s.location)}.`);
+      }
+      if (key === "get_off") {
+        s.ride = null;
+        return k.fact(`You step off at ${short(s.location)}, ticket still in hand, bus already reversing into the depot.`);
+      }
+      s.pendingDelay += 12;
+      s.pendingDelayReason = "the wait for the next bus";
+      k.fact("You wait at the depot gate. The next one honours your ticket, eventually.");
+    },
+  },
+  {
+    id: "checker",
+    canHappen: (s) => isBus(s.ride?.transport),
+    offer: () => ({
+      prompt: `A ticket checker climbs aboard: "Tickets!" Your ticket was in your hand a moment ago. Now it isn't.`,
+      options: [
+        { key: "fine", label: "Pay the ₹50 fine" },
+        { key: "search", label: "Search every pocket (~4 min)" },
+        { key: "plead", label: `Plead: "Sir, my flight!"` },
+      ],
+      fallback: "fine",
+    }),
+    resolve: (s, key, k) => {
+      const payFine = (why: string) => {
+        if (spendable(s) >= 50) {
+          k.pay(50);
+          return k.fact(`${why} You pay the ₹50 fine, and the checker writes a receipt with great ceremony.`);
+        }
+        s.ride = null;
+        k.fact(`${why} You can't pay the ₹50 fine (${describeWallet(s)}), so the checker walks you off the bus at ${short(s.location)}.`);
+      };
+      if (key === "search") {
+        k.minutes(4);
+        return k.rng() < 0.5 ? k.fact("It was folded inside your boarding pass printout all along. The checker nods, almost disappointed.") : payFine("Nothing.");
+      }
+      if (key === "plead") return k.rng() < 0.35 ? k.fact('The checker looks at your face, then at the traffic, and sighs: "Go. Catch your flight."') : payFine("He has heard it before.");
+      payFine("You don't argue.");
+    },
+  },
+  {
+    id: "race",
+    canHappen: (s) => isBus(s.ride?.transport) && stopsLeft(s) >= 1,
+    offer: (s) => ({
+      prompt: `Another ${s.ride!.line ?? "bus"} pulls up alongside. The two drivers look at each other. The whole bus goes quiet.`,
+      options: [
+        { key: "cheer", label: "Cheer him on!" },
+        { key: "slow", label: "Ask him to slow down" },
+      ],
+      fallback: "cheer",
+    }),
+    resolve: (s, key, k) => {
+      if (key === "slow") {
+        s.pendingDelay += 2;
+        s.pendingDelayReason = "a sulking driver";
+        return k.fact("The driver lets the other bus go, and sulks for the rest of the stretch.");
+      }
+      s.shortcutBonus -= 7;
+      if (s.inventory.length && k.rng() < 0.4) {
+        const lost = s.inventory.splice(Math.floor(k.rng() * s.inventory.length), 1)[0];
+        if (lost === "samosa") s.flags.push("lost:samosa");
+        return k.fact(`The bus wins by a bumper, but the last hard brake sends your ${lost === "samosa" ? "cold samosa" : lost} flying down the aisle. Gone.`);
+      }
+      k.fact("The whole bus roars as your driver wins by a bumper. Even the conductor is smiling.");
+    },
+  },
   {
     id: "friend",
     canHappen: (s) => s.battery > 0 && !s.meet && Boolean(meetPlace(s)),

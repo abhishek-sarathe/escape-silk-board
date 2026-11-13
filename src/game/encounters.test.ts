@@ -33,7 +33,7 @@ describe("mid-ride decisions", () => {
 
   it("ignoring a decision applies its fallback and still does what you asked", () => {
     const { state, outcome } = resolveTurn(asked("breakdown", onKia8()), act({ kind: "continue" }));
-    expect(state.pending ?? null).toBeNull();
+    expect(state.pending?.id).not.toBe("breakdown"); // answered (the city may already be asking something new)
     expect(state.ride?.transport).toBe("airport_bus"); // stayed with the bus
     expect(outcome.facts.join(" ")).toMatch(/let the moment pass/);
   });
@@ -81,5 +81,45 @@ describe("keep going skips the boring part", () => {
       if (state.ride && state.status === "playing") expect(state.pending || state.flags.some((f) => /^(event|decision):/.test(f))).toBeTruthy();
     }
     expect(multiStop).toBeGreaterThan(10);
+  });
+});
+
+describe("BMTC chaos", () => {
+  const on500D = (): Partial<GameState> => ({
+    location: "hsr",
+    visited: ["silk_board", "hsr"],
+    ride: { transport: "bus", destination: "hennur", line: "500-D", path: ["hsr", "marathahalli", "kr_puram", "hennur"] },
+  });
+
+  it("'Last stop, depot!': getting off leaves you on the pavement; waiting keeps your ticket", () => {
+    const off = resolveTurn(asked("depot", on500D()), act({ kind: "choose", choice: "get_off" })).state;
+    expect(off.ride).toBeNull();
+    expect(off.location).toBe("hsr");
+    const wait = resolveTurn(asked("depot", on500D()), act({ kind: "choose", choice: "next_bus" })).state;
+    expect(wait.ride?.line).toBe("500-D");
+  });
+
+  it("a ticket checker you can't pay walks you off the bus", () => {
+    const broke = asked("checker", { ...on500D(), cash: 10, upi: 0 });
+    const { state, outcome } = resolveTurn(broke, act({ kind: "choose", choice: "fine" }));
+    expect(state.ride).toBeNull();
+    expect(outcome.facts.join(" ")).toMatch(/walks you off the bus/);
+  });
+
+  it("paying the fine costs ₹50 and keeps you on board", () => {
+    const s = asked("checker", on500D());
+    const { state } = resolveTurn(s, act({ kind: "choose", choice: "fine" }));
+    expect(totalMoney(s) - totalMoney(state)).toBe(50);
+    expect(state.ride?.line).toBe("500-D");
+  });
+
+  it("bus waits vary by evening: sometimes at once, sometimes three come together", () => {
+    const waits = new Set<string>();
+    for (let seed = 0; seed < 40; seed++) {
+      const { outcome } = resolveTurn(newGame(seed), act({ kind: "hire", transport: "bus", destination: "hennur" }));
+      const f = outcome.facts.join(" ");
+      waits.add(/just as you reach the stop/.test(f) ? "lucky" : /arrive together/.test(f) ? "bunched" : "usual");
+    }
+    expect(waits).toEqual(new Set(["lucky", "bunched", "usual"]));
   });
 });

@@ -265,7 +265,7 @@ describe("determinism and balance", () => {
       );
       if (bus.state.status === "won") busWins++;
     }
-    expect(smartWins).toBeGreaterThan(120);
+    expect(smartWins).toBeGreaterThan(100); // bus waits and BMTC surprises vary: about half or better
     expect(busWins).toBeLessThan(100); // the KIA-8 from Silk Board loses more often than it wins; see balance.test.ts
   });
 });

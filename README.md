@@ -96,13 +96,16 @@ At each stop the city may throw something at you (`src/game/encounters.ts`). The
 - **A flooded underpass** (only in rain).
 - **An annoying passenger** pitching his crypto startup, who knows which lane moves.
 - **A kid wants your samosa:** trade it for a power-bank charge or ₹30.
+- **"Last stop! Depot!"** halfway along: argue (it may work), wait for the next bus on the same ticket, or get off.
+- **A ticket checker,** just as your ticket vanishes: pay the ₹50 fine, search your pockets, or plead. Can't pay? You're walked off the bus.
+- **Two BMTC drivers race:** cheer and gain minutes, but a hard brake may send something from your bag flying.
 - **Your friend Kiran calls** offering a lift: get to the meeting place in time and you ride to the airport free.
 
 Ignore a decision and its default applies. Every effect is engine code; the narrator only tells it. "Keep going" rides stop by stop until something happens or you arrive, so turns are spent on choices, not waiting.
 
 ### Real BMTC buses
 
-The buses are real. Three kinds run: ordinary BMTC (500-D, 201...), Vajra AC (V-500D...) and Vayu Vajra airport buses (KIA-8, KIA-7A...), plus the ₹40 ordinary 281-AP to the airport from Hebbal. Each bus has its real route number, its real route through the game's places, and a typical real fare. Players can ask for a kind of bus ("normal bus", "AC bus") or a route number ("500-D", "KIA-8"). A bus that doesn't run from where you are is refused, and the refusal names the ones that do.
+The buses are real, and so is the wait: tonight's bus may pull up as you reach the stop, or after twenty minutes of nothing, three arrive together. Three kinds run: ordinary BMTC (500-D, 201...), Vajra AC (V-500D...) and Vayu Vajra airport buses (KIA-8, KIA-7A...), plus the ₹40 ordinary 281-AP to the airport from Hebbal. Each bus has its real route number, its real route through the game's places, and a typical real fare. Players can ask for a kind of bus ("normal bus", "AC bus") or a route number ("500-D", "KIA-8"). A bus that doesn't run from where you are is refused, and the refusal names the ones that do.
 
 The data comes from the [unofficial BMTC GTFS feed](https://github.com/Vonter/bmtc-gtfs) (ODbL-1.0), built into `src/game/busData.json` by `scripts/build-bus-data.py`. See [`src/game/busData.LICENSE.md`](src/game/busData.LICENSE.md). The feed's timetables are unreliable, so travel times use the game's traffic model, scaled per bus type by how fast that type runs in the feed. To rebuild:
 

@@ -54,6 +54,9 @@ const PIN: Record<string, string> = {
   "decision:passenger": "🗣️",
   "decision:samosa": "🥟",
   "decision:friend": "📞",
+  "decision:depot": "🚏",
+  "decision:checker": "🎫",
+  "decision:race": "🏁",
 };
 
 // Night palette, from the game's own colours (night, panel, line, paper, sodium).
