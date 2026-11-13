@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw BMTC GTFS download (scripts/build-bus-data.py)
+bmtc.zip
+
+# LLM call log (src/server/llmLog.ts)
+.data/

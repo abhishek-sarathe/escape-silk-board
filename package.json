@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "node scripts/test.mjs",
+    "usage": "node --no-warnings scripts/usage.mjs"
   },
   "dependencies": {
     "next": "16.4.6",
