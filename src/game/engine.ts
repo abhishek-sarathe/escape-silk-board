@@ -576,8 +576,15 @@ const EVENTS: EventSpec[] = [
     text: "Police stop all traffic for a VIP convoy. Your next stretch by road will be 12 minutes slower.",
     canHappen: () => true,
     apply: (s) => {
+      // Same delay, different cause each evening, so the city doesn't repeat itself.
+      const [text, reason] = variant(s, "convoy", [
+        ["Police stop all traffic for a VIP convoy. Your next stretch by road will be 12 minutes slower.", "the VIP convoy"],
+        ["A political rally spills onto the road, flags and all. Your next stretch by road will be 12 minutes slower.", "the rally"],
+        ["A wedding procession with a full brass band takes over the road. Your next stretch by road will be 12 minutes slower.", "the baraat"],
+      ]);
       s.pendingDelay += 12;
-      s.pendingDelayReason = "the VIP convoy";
+      s.pendingDelayReason = reason;
+      return text;
     },
   },
   {
@@ -585,8 +592,15 @@ const EVENTS: EventSpec[] = [
     text: "A truck breaks down across two lanes ahead. Your next stretch by road will be 8 minutes slower.",
     canHappen: () => true,
     apply: (s) => {
+      const [text, reason] = variant(s, "jam", [
+        ["A truck breaks down across two lanes ahead. Your next stretch by road will be 8 minutes slower.", "the broken-down truck"],
+        ["Two cars have a fender-bender and both drivers get out to argue. Your next stretch by road will be 8 minutes slower.", "the roadside argument"],
+        ["A cow settles down in the middle lane and refuses to move. Your next stretch by road will be 8 minutes slower.", "the cow"],
+        ["Metro construction closes a lane without warning. Your next stretch by road will be 8 minutes slower.", "the metro works"],
+      ]);
       s.pendingDelay += 8;
-      s.pendingDelayReason = "the broken-down truck";
+      s.pendingDelayReason = reason;
+      return text;
     },
   },
   {
@@ -598,6 +612,11 @@ const EVENTS: EventSpec[] = [
     },
   },
 ];
+
+/** One of several flavours of the same happening, chosen by this evening's seed and turn. */
+function variant<T>(s: GameState, key: string, options: T[]): T {
+  return options[Math.floor(rngFor(s.seed, s.turn, "variant", key)() * options.length)];
+}
 
 /**
  * At each stop the city may throw something at you: a happening (rain, a convoy, a lift) or a

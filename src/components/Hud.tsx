@@ -91,9 +91,10 @@ function Chip({ label, children, tone = "normal", pop }: { label: string; childr
 const COMPACT_KEY = "escape-silk-board:compact-card";
 function readCompact(): boolean {
   try {
-    return window.localStorage.getItem(COMPACT_KEY) === "1";
+    // Compact is the default; only an explicit choice of the full card turns it off.
+    return window.localStorage.getItem(COMPACT_KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 function saveCompact(on: boolean) {
@@ -132,7 +133,7 @@ export default function Hud({ state, delta }: { state: PublicState; delta: Outco
   const [mapOpen, setMapOpen] = useState(false);
   // The HUD only renders after the game loads in the browser, so reading storage here can't cause a
   // hydration mismatch.
-  const [compact, setCompact] = useState(() => typeof window !== "undefined" && readCompact());
+  const [compact, setCompact] = useState(() => typeof window === "undefined" || readCompact());
   const toggleCompact = () =>
     setCompact((v) => {
       saveCompact(!v);

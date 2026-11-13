@@ -12,6 +12,9 @@ import Hud from "./Hud";
 import { readRecord, saveResult, type PlayerRecord } from "./record";
 import { mixMoves, suggest } from "./suggestions";
 
+/** Seconds of quiet during a ride before it moves on by itself. */
+const AUTO_RIDE_SECONDS = 12;
+
 export default function Game() {
   const [state, setState] = useState<PublicState | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -45,9 +48,13 @@ export default function Game() {
       setPlanned(data.suggestions ?? []);
       setLastShown([]);
       setEntries([{ id: ids.current++, kind: "narrator", text: data.narration, at: 0 }]);
+      // A shared ?seed= link replays that evening once; after that the address is clean, so a reload
+      // starts a new evening instead of replaying the same traffic. "Same evening, again" still works.
       const url = new URL(window.location.href);
-      url.searchParams.set("seed", String(data.state.seed));
-      window.history.replaceState(null, "", url);
+      if (url.searchParams.has("seed")) {
+        url.searchParams.delete("seed");
+        window.history.replaceState(null, "", url);
+      }
     } catch (err) {
       setEntries([{ id: ids.current++, kind: "error", text: err instanceof Error ? err.message : "Couldn't start the game." }]);
     } finally {
@@ -98,6 +105,31 @@ export default function Game() {
   // A waiting decision shows exactly its options; otherwise mix planned moves with fresh local ideas.
   const moves = !state ? [] : state.pending ? suggest(state) : mixMoves(planned, suggest(state, 8), lastShown);
 
+  // On a ride with nothing to decide, the city doesn't wait for you: after a quiet spell the ride moves on
+  // by itself. Typing anything, or the tab being hidden, holds it (so an idle tab doesn't spend AI calls).
+  const riding = Boolean(state?.ride) && !state?.pending && state?.status === "playing";
+  const [autoIn, setAutoIn] = useState<number | null>(null);
+  const autoRef = useRef(send);
+  autoRef.current = send;
+  useEffect(() => {
+    if (!riding || busy || input.trim()) return;
+    let left = AUTO_RIDE_SECONDS;
+    const tick = setInterval(() => {
+      if (document.hidden) return;
+      left -= 1;
+      setAutoIn(left);
+      if (left <= 0) {
+        clearInterval(tick);
+        setAutoIn(null);
+        void autoRef.current("Keep going");
+      }
+    }, 1000);
+    return () => {
+      clearInterval(tick);
+      setAutoIn(null);
+    };
+  }, [riding, busy, input, state?.turn]);
+
   return (
     <div className="relative flex min-h-dvh flex-col">
       <Backdrop raining={Boolean(state?.raining) && !over} />
@@ -128,7 +160,13 @@ export default function Game() {
         <div className="mx-auto max-w-2xl px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {/* Fixed-height row: the moves change every turn, the layout doesn't. */}
           <div className="mb-2 flex h-10 items-center gap-2 sm:h-9 overflow-x-auto [scrollbar-width:none]">
-            <span className="shrink-0 text-xs text-muted font-mono uppercase tracking-wider hidden sm:inline">Quick moves:</span>
+            {riding && autoIn !== null && !busy ? (
+              <span className="shrink-0 font-mono text-[11px] text-muted" aria-live="polite">
+                Riding on in {autoIn}s…
+              </span>
+            ) : (
+              <span className="shrink-0 text-xs text-muted font-mono uppercase tracking-wider hidden sm:inline">Quick moves:</span>
+            )}
             {moves.map((m) => (
               <button
                 key={m}
