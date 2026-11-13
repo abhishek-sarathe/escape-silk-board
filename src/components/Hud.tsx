@@ -4,6 +4,7 @@ import { PLACES } from "@/game/map";
 import { CHECKIN_CLOSES, ITEMS, TRANSPORT } from "@/game/rules";
 import type { ItemId, Outcome } from "@/game/types";
 import type { PublicState } from "@/game/view";
+import { describeWallet, spendable } from "@/game/money";
 import { BengaluruMap } from "./BengaluruMap";
 import Scene from "./Scene";
 
@@ -89,6 +90,24 @@ function Chip({ label, children, tone = "normal", pop }: { label: string; childr
 
 /** Remembers the compact choice in this browser only; storage can be blocked, so every access is guarded. */
 const COMPACT_KEY = "escape-silk-board:compact-card";
+const MAP_KEY = "escape-silk-board:show-map";
+
+/** A remembered on/off choice; blocked storage just means the default. */
+function readFlag(key: string, fallback: boolean): boolean {
+  try {
+    const v = window.localStorage.getItem(key);
+    return v === null ? fallback : v === "1";
+  } catch {
+    return fallback;
+  }
+}
+function saveFlag(key: string, on: boolean) {
+  try {
+    window.localStorage.setItem(key, on ? "1" : "0");
+  } catch {
+    // storage blocked: the choice lasts for this page only
+  }
+}
 function readCompact(): boolean {
   try {
     // Compact is the default; only an explicit choice of the full card turns it off.
@@ -129,10 +148,19 @@ function Stat({ label, children, sub, tone = "normal", pop, tint }: {
 export default function Hud({ state, delta, onMove }: { state: PublicState; delta: Outcome["delta"] | null; onMove?: (text: string) => void }) {
   const minutes = useTween(state.minutes);
   const cash = useTween(state.cash);
+  const upi = useTween(state.upi ?? 0);
+  const upiLocked = state.battery <= 0 && (state.upi ?? 0) > 0;
+  const broke = spendable(state) < 50;
   const battery = useTween(state.battery);
   // The HUD only renders after the game loads in the browser, so reading storage here can't cause a
   // hydration mismatch.
   const [compact, setCompact] = useState(() => typeof window === "undefined" || readCompact());
+  const [showMap, setShowMap] = useState(() => typeof window === "undefined" || readFlag(MAP_KEY, true));
+  const toggleMap = () =>
+    setShowMap((v) => {
+      saveFlag(MAP_KEY, !v);
+      return !v;
+    });
   const toggleCompact = () =>
     setCompact((v) => {
       saveCompact(!v);
@@ -151,8 +179,8 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
   return (
     <section aria-label="Your situation" className="sticky top-0 z-20 self-start px-3 pt-3 max-lg:w-full">
       <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border-2 border-line bg-panel p-3 sm:p-4">
-        {/* The street scene is background on wide screens; on phones the route map is the picture. */}
-        <div className="-mx-3 -mt-3 mb-3 hidden sm:-mx-4 sm:-mt-4 lg:block">
+        {/* The street: a short strip on phones (cropped from the top), the full scene on wide screens. */}
+        <div className="-mx-3 -mt-3 mb-3 h-20 overflow-hidden sm:-mx-4 sm:-mt-4 sm:h-28 lg:h-auto">
           <Scene state={state} />
         </div>
         <div className="relative flex items-end justify-between gap-4">
@@ -202,11 +230,12 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
               {battery}%
             </Chip>
             <Chip
-              label={`Money ₹${state.cash}`}
-              tone={state.cash < 50 ? "warn" : "normal"}
+              label={`Money: ${describeWallet(state)}`}
+              tone={broke ? "warn" : "normal"}
               pop={<Pop turn={state.turn} text={delta?.cash ? `${delta.cash > 0 ? "+" : "−"}₹${Math.abs(delta.cash)}` : null} tone={delta && delta.cash > 0 ? "text-go" : "text-brake"} />}
             >
               <span aria-hidden>💵</span>₹{cash}
+              <span aria-hidden className={`ml-1 ${upiLocked ? "text-brake line-through" : ""}`}>📱₹{upi}</span>
             </Chip>
             <Chip label={`Bag: ${bagSummary(state.inventory)}`}>
               <span aria-hidden className="tracking-widest">
@@ -231,13 +260,14 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
             </span>
           </Stat>
           <Stat
-            label="Money"
-            tint="bg-night text-muted"
-            tone={state.cash < 50 ? "warn" : "normal"}
-            sub={state.quote ? `Auto asks ₹${state.quote.ask}` : state.cash < 50 ? "Almost broke" : "In your wallet"}
+            label="Cash · UPI"
+            tint={`bg-night text-muted ${upiLocked ? "ring-1 ring-brake" : ""}`}
+            tone={broke ? "warn" : "normal"}
+            sub={upiLocked ? `UPI ₹${state.upi} locked: phone dead` : state.quote ? `Auto asks ₹${state.quote.ask}` : broke ? "Almost broke" : `+ ₹${state.upi ?? 0} on UPI`}
             pop={<Pop turn={state.turn} text={delta?.cash ? `${delta.cash > 0 ? "+" : "−"}₹${Math.abs(delta.cash)}` : null} tone={delta && delta.cash > 0 ? "text-go" : "text-brake"} />}
           >
             ₹{cash}
+            <span className={`ml-1.5 text-sm ${upiLocked ? "text-brake line-through" : "text-muted"}`}>+₹{upi}</span>
           </Stat>
           <Stat label="Bag" tint="bg-night text-muted" sub={state.raining ? "It's raining" : "Dry, for now"}>
             <span className="block whitespace-normal text-xs font-semibold leading-tight">{bagSummary(state.inventory)}</span>
@@ -257,6 +287,14 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
           <div className="flex shrink-0 gap-1.5">
           <button
             type="button"
+            aria-expanded={showMap}
+            onClick={toggleMap}
+            className="shrink-0 rounded-md border border-sodium/60 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-sodium hover:bg-sodium hover:text-night"
+          >
+            {showMap ? "Hide map" : "Map"}
+          </button>
+          <button
+            type="button"
             aria-pressed={compact}
             onClick={toggleCompact}
             className="shrink-0 rounded-md border border-line px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-paper"
@@ -265,8 +303,8 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
           </button>
           </div>
         </div>
-        {/* The signature: always on screen. */}
-        <div className="mt-2">
+        {/* The signature. On by default; the player can fold it away to give the story more room. */}
+        <div className={`mt-2 ${showMap ? "" : "hidden"}`}>
           <BengaluruMap state={state} onMove={onMove} />
         </div>
       </div>

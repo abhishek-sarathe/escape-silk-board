@@ -21,7 +21,6 @@ export default function Game() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(true);
-  const [via, setVia] = useState<string | null>(null);
   const [delta, setDelta] = useState<Outcome["delta"] | null>(null);
   const [record, setRecord] = useState<PlayerRecord | null>(null);
   /** The ending card can be closed to read back through the evening, and reopened. */
@@ -42,7 +41,6 @@ export default function Game() {
       const data = await startGame(seed);
       setState(data.state);
       setToken(data.token);
-      setVia(null);
       setDelta(null);
       setRecord(readRecord());
       setPlanned(data.suggestions ?? []);
@@ -85,7 +83,6 @@ export default function Game() {
       setPlanned(data.suggestions ?? []);
       setState(data.state);
       setToken(data.token);
-      setVia(data.via.narrator);
       setDelta(data.outcome.delta);
       if (data.state.status !== "playing") {
         setRecord(saveResult(data.state.status === "won", CHECKIN_CLOSES - data.state.minutes));
@@ -102,7 +99,6 @@ export default function Game() {
   }
 
   const over = state && state.status !== "playing";
-  const tokens = state ? state.usage.promptTokens + state.usage.completionTokens : 0;
   // A waiting decision shows exactly its options; otherwise mix planned moves with fresh local ideas.
   const moves = !state ? [] : state.pending ? suggest(state) : mixMoves(planned, suggest(state, 8), lastShown);
 
@@ -208,16 +204,6 @@ export default function Game() {
               Go
             </button>
           </form>
-          {state && (
-            <p className="mt-2 truncate font-mono text-[10px] text-muted">
-              Evening #{state.seed}
-              {via && ` · narrated by ${via}`}
-              {tokens > 0 && ` · ${(tokens / 1000).toFixed(1)}k tokens`}
-              {state.usage.costUsd > 0 && ` · $${state.usage.costUsd.toFixed(4)}`}
-              {(state.usage.cachedTokens ?? 0) > 0 &&
-                ` · ${Math.round((100 * (state.usage.cachedTokens ?? 0)) / Math.max(1, state.usage.promptTokens))}% cached`}
-            </p>
-          )}
         </div>
       </footer>
       </div>

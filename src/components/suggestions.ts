@@ -2,6 +2,7 @@
 // They are ordinary player text: the agent, referee and engine treat them like anything typed.
 // Each turn shows the most useful move first, then a few drawn from a bigger pool. The draw is seeded
 // by game and turn, so the buttons stay put while you read, and change when the turn does.
+import { spendable } from "@/game/money";
 import type { LocationId } from "@/game/types";
 import type { PublicState } from "@/game/view";
 
@@ -84,12 +85,13 @@ export function suggest(s: PublicState, more = 3): string[] {
   }
 
   if (s.quote) {
-    const counter = Math.min(s.cash, Math.round((s.quote.ask * 0.7) / 10) * 10);
-    const lowball = Math.min(s.cash, Math.round((s.quote.ask * 0.5) / 10) * 10);
+    const money = spendable(s);
+    const counter = Math.min(money, Math.round((s.quote.ask * 0.7) / 10) * 10);
+    const lowball = Math.min(money, Math.round((s.quote.ask * 0.5) / 10) * 10);
     return pick(
       [`I offer ₹${counter}${samosa ? " and my samosa" : ""}`],
       [
-        ...(s.quote.ask <= s.cash ? [`Okay, ₹${s.quote.ask}. Chalo.`] : []),
+        ...(s.quote.ask <= money ? [`Okay, ₹${s.quote.ask}. Chalo.`] : []),
         "Meter se chalo, anna",
         `₹${lowball}, final offer`,
         "Walk away and see if he follows",

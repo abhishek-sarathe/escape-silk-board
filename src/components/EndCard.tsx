@@ -194,7 +194,7 @@ function BoardingPass({ state, gap, route }: { state: PublicState; gap: number; 
         <Field k="Flight" v="ES 940" />
         <Field k="Check-in" v={formatClock(state.minutes)} />
         <Field k="Seat" v="14A window" />
-        <Field k="Cash left" v={`₹${state.cash}`} />
+        <Field k="Money left" v={`₹${state.cash} cash · ₹${state.upi ?? 0} UPI`} />
         <Field k="Battery" v={`${state.battery}%`} />
         <Field k="Moves" v={`${state.turn}`} />
         <Field k="Your route" v={`${route} ✈️`} wide />
@@ -214,7 +214,7 @@ function TrafficAward({ state, gap, gaveUp, route }: { state: PublicState; gap: 
     ["Flight ES 940", gaveUp ? "Abandoned" : `Missed by ${gap} min`],
     ["Last seen at", PLACES[state.location].short],
     ["Clock", formatClock(state.minutes)],
-    ["Cash left", `₹${state.cash}`],
+    ["Money left", `₹${state.cash} cash · ₹${state.upi ?? 0} UPI`],
     ["Battery left", `${state.battery}%`],
     ["Moves made", `${state.turn}`],
   ];
