@@ -3,6 +3,7 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-bungee), var(--font-geist-mono), monospace;
 }
 
 /* Night palette: sodium street lights, brake lights, the green of a moving signal. */
@@ -12,9 +13,13 @@
   --color-line: #262b33;
   --color-muted: #8b919b;
   --color-paper: #ece8e1;
-  --color-sodium: #f5a524;
+  --color-sodium: #ffcf33;
   --color-brake: #ff5a4f;
   --color-go: #3ecf8e;
+  /* Shop signs and bus-stand neon. */
+  --color-neon: #ff4fa3;
+  --color-sky: #22d3ee;
+  --color-violet: #7c5cff;
 }
 
 html {
@@ -22,11 +27,14 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 50% -240px, #1d1810 0%, transparent 70%),
-    var(--color-night);
-  background-attachment: fixed;
+  background: var(--color-night);
   color: var(--color-paper);
+}
+
+/* Road-barricade stripe: hard-edged, the same yellow and black as an auto. */
+.hazard {
+  height: 6px;
+  background: repeating-linear-gradient(-45deg, var(--color-sodium) 0 10px, var(--color-night) 10px 20px);
 }
 
 @keyframes pulse-soft {
@@ -58,8 +66,221 @@ body {
   animation: rise 240ms ease-out both;
 }
 
+/* A travelled stretch of road draws itself in. Needs pathLength={1} on the line. */
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-draw {
+  stroke-dasharray: 1;
+  animation: draw 900ms ease-out both;
+}
+
+/* "+17 min", "−₹243": a change floats up off the number it changed. */
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  15% {
+    opacity: 1;
+    transform: none;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+.animate-pop {
+  animation: pop 2.4s ease-out both;
+}
+
+@keyframes stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-9deg) scale(2.2);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-9deg) scale(1);
+  }
+}
+
+.animate-stamp {
+  animation: stamp 380ms cubic-bezier(0.2, 1.4, 0.4, 1) 500ms both;
+}
+
+/* Out-of-focus tail lights drifting along the bottom of the screen. */
+@keyframes drift {
+  from {
+    transform: translateX(-60px);
+  }
+  to {
+    transform: translateX(60px);
+  }
+}
+
+.bokeh {
+  position: absolute;
+  bottom: -90px;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.16;
+  animation: drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes rain {
+  to {
+    background-position: -120px 240px;
+  }
+}
+
+.rain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg stroke='%23b4ccff' stroke-linecap='round'%3E%3Cpath d='M20 6l-7 14M74 30l-7 14M44 70l-7 14M104 88l-7 14M96 10l-5 10'/%3E%3C/g%3E%3C/svg%3E");
+  animation: rain 0.6s linear infinite;
+}
+
+.rain-far {
+  opacity: 0.12;
+  background-size: 90px 90px;
+  animation-duration: 0.9s;
+}
+
+.rain-near {
+  opacity: 0.22;
+}
+
+/* The street scene. Layers scroll only while a ride is carrying you (.scene-moving). */
+@keyframes scene-scroll {
+  to {
+    transform: translateX(var(--period));
+  }
+}
+
+.scene-layer {
+  animation: scene-scroll var(--speed) linear infinite;
+  animation-play-state: paused;
+}
+
+.scene-moving .scene-layer {
+  animation-play-state: running;
+}
+
+@keyframes dash-run {
+  to {
+    stroke-dashoffset: 48;
+  }
+}
+
+.scene-moving .scene-dash {
+  animation: dash-run 0.35s linear infinite;
+}
+
+@keyframes dash-crawl {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+.scene-dash-slow {
+  animation: dash-crawl 0.6s linear infinite;
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+.scene-bob {
+  animation: bob 0.45s ease-in-out infinite;
+}
+
+@keyframes streaks {
+  from {
+    transform: translateX(60px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(-80px);
+    opacity: 0;
+  }
+}
+
+.scene-streaks {
+  animation: streaks 0.7s linear infinite;
+}
+
+@keyframes lightning {
+  0%,
+  91%,
+  100% {
+    opacity: 0;
+  }
+  92% {
+    opacity: 0.6;
+  }
+  94% {
+    opacity: 0.05;
+  }
+  95% {
+    opacity: 0.4;
+  }
+}
+
+.scene-lightning {
+  opacity: 0;
+  animation: lightning 7s linear infinite;
+}
+
+@keyframes takeoff {
+  from {
+    transform: translate(-40px, 20px);
+  }
+  to {
+    transform: translate(300px, -110px);
+  }
+}
+
+.scene-takeoff {
+  animation: takeoff 6s ease-in infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .scene-layer,
+  .scene-moving .scene-dash,
+  .scene-dash-slow,
+  .scene-bob,
+  .scene-streaks,
+  .scene-lightning,
+  .scene-takeoff,
+  .bokeh,
+  .rain,
+  .animate-pop,
+  .animate-stamp {
+    animation: none;
+  }
+
+  .animate-pop {
+    display: none;
+  }
+
   .animate-pulse-soft,
+  .animate-draw,
   .animate-rise {
     animation: none;
   }
