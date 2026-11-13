@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Night palette: sodium street lights, brake lights, the green of a moving signal. */
+@theme {
+  --color-night: #0b0d10;
+  --color-panel: #14171c;
+  --color-line: #262b33;
+  --color-muted: #8b919b;
+  --color-paper: #ece8e1;
+  --color-sodium: #f5a524;
+  --color-brake: #ff5a4f;
+  --color-go: #3ecf8e;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 50% -240px, #1d1810 0%, transparent 70%),
+    var(--color-night);
+  background-attachment: fixed;
+  color: var(--color-paper);
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.2s ease-in-out infinite;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 240ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-soft,
+  .animate-rise {
+    animation: none;
+  }
+}
