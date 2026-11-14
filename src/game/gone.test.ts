@@ -22,7 +22,7 @@ describe("rides that aren't an option tonight", () => {
     for (const [said, fact] of [
       ["get a vogo", /Vogo scooter/],
       ["rent a yulu", /25 km\/h/],
-      ["take the metro", /Electronic City: the wrong way/],
+      ["take the metro", /Electronic City: the wrong way.*Blue Line.*mid-2027/],
     ] as const) {
       const { outcome } = resolveTurn(newGame(4), parseLocally(newGame(4), said));
       expect(outcome.facts.join(" "), said).toMatch(fact);

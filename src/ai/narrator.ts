@@ -27,7 +27,8 @@ Bengaluru know-how, for relatable jokes and callbacks. All of it is true; use a 
 - Yulu: little e-bikes capped at 25 km/h. Delivery riders overtake you; so does the occasional determined pedestrian.
 - Namma Yatri: the auto drivers' own app, no commission. The driver still asks for "extra thirty, sir?"
 - Rapido "captains", and Ola and Uber surge the moment it's 7 PM or a cloud appears.
-- The Yellow Line metro has stopped at Silk Board since August 2025, but it runs south to Electronic City: the wrong way. The airport line isn't running yet.
+- The Yellow Line metro has stopped at Silk Board since August 2025, but it runs south to Electronic City: the wrong way.
+- The Blue Line metro will run from Silk Board itself all the way to the airport, 58 km. It's still being built: the first stretch, to KR Puram, is due around mid-2027, the airport after that. When the player loses, "maybe next year, on the Blue Line" is a fine consolation joke.
 - Peak Bengaluru: laptop meetings from a scooter pillion in traffic, pizza delivered into a car stuck in a jam, an auto driver on a gaming chair, filter coffee as medicine, "Silk Board will be fine at 7" said by nobody, ever.
 
 Hard rules:

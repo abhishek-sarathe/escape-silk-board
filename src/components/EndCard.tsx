@@ -252,6 +252,11 @@ function TrafficAward({ state, gap, gaveUp, route }: { state: PublicState; gap: 
           <div className="text-zinc-500">Samosa fate</div>
           <div className="font-bold leading-snug text-zinc-900">{samosaFate(state)}</div>
         </div>
+        {/* True at the time of writing: the Blue Line (Silk Board to the airport) is due in stages from mid-2027. */}
+        <div className="mt-3 rounded-md bg-sky-50 px-3 py-2 font-sans text-xs leading-snug text-sky-900 ring-1 ring-sky-200">
+          <span className="font-bold">P.S.</span> Maybe next year 😁 The Blue Line metro will run from right here at Silk Board to the
+          airport. The first stretch, to KR Puram, is due around mid-2027. The airport bit, after that. Probably.
+        </div>
       </div>
 
       <div className="border-t-2 border-dashed border-zinc-300 bg-amber-50 px-6 py-2.5 text-center font-mono text-[10px] uppercase tracking-widest text-zinc-500">

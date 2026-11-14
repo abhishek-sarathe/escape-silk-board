@@ -5,7 +5,8 @@
 //  - Vogo, once Ola-backed, has been scaled down; one report says Chalo acquired it in 2022.
 //  - Yulu's e-bikes are capped at 25 km/h and are parked back in Yulu zones.
 //  - The Namma Metro Yellow Line (opened August 2025) stops at Central Silk Board but runs south, to
-//    Electronic City; the airport line isn't running yet.
+//    Electronic City. The Blue Line (58 km, Silk Board to the airport) is under construction: Silk Board
+//    to KR Puram targeted around May-June 2027, the airport stretch later (no official BMRCL date).
 
 export interface Gone {
   id: string;
@@ -39,7 +40,7 @@ export const GONE: Gone[] = [
   {
     id: "metro",
     words: /\b(metro|namma metro|yellow line)\b/i,
-    fact: "The Yellow Line metro does stop at Silk Board now, but it runs south to Electronic City: the wrong way. The airport line isn't running yet.",
+    fact: "The Yellow Line metro does stop at Silk Board now, but it runs south to Electronic City: the wrong way. The Blue Line from Silk Board to the airport is still being built: its first stretch, to KR Puram, is due around mid-2027, and the airport after that.",
     minutes: 3,
   },
 ];
