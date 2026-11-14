@@ -1,6 +1,6 @@
 // The rules of the city. Pure functions: (state, action) -> (new state, what happened).
 // The LLM only ever proposes an Action; every number below is decided here.
-import { formatClock } from "./clock";
+import { deadlineOf, formatClock } from "./clock";
 import { BUS_TYPES, busLink, busOptions, busSpeed, isBus, lineFrom, type BusLine, type BusType, type LineStop } from "./buses";
 import { ENCOUNTERS, FRIEND, findEncounter, type Kit } from "./encounters";
 import { PLACES, edgeBetween, kmToAirport, neighbors, pathKm, route, tollOn } from "./map";
@@ -15,7 +15,6 @@ import {
   BUS_LANE,
   CHARGE_MINUTES,
   CHARGING_FEE,
-  CHECKIN_CLOSES,
   CHECKIN_MINUTES,
   EVENT_CHANCE,
   FINAL_CALL_AT,
@@ -457,6 +456,7 @@ function charge(s: GameState, a: Action, ctx: Ctx) {
 }
 
 function buy(s: GameState, a: Action, ctx: Ctx) {
+  if (s.location === "airport" && !s.flags.includes("airport_snack")) s.flags.push("airport_snack");
   ctx.actionMinutes += 3;
   if (s.ride) {
     ctx.refused.push(`You can't shop from a moving ${label(s.ride.transport)}.`);
@@ -651,7 +651,7 @@ function rollEvent(s: GameState, stop = 0): CityEvent | null {
   if (s.turn < 2 || s.location === "airport" || s.pending) return null;
   const rng = rngFor(s.seed, s.turn, "event", stop);
   const seen = s.flags.filter((f) => f.startsWith("event:") || f.startsWith("decision:")).length;
-  const chance = CHECKIN_CLOSES - s.minutes <= FINAL_STRETCH ? FINAL_EVENT_CHANCE : EVENT_CHANCE;
+  const chance = deadlineOf(s) - s.minutes <= FINAL_STRETCH ? FINAL_EVENT_CHANCE : EVENT_CHANCE;
   if (seen >= MAX_EVENTS || rng() >= chance) return null;
   const pool = [
     ...EVENTS.filter((e) => !s.flags.includes(`event:${e.id}`) && e.canHappen(s)).map((e) => ({ kind: "event" as const, e })),
@@ -689,9 +689,38 @@ function checkMeet(s: GameState, ctx: Ctx) {
   ctx.facts.push(`${FRIEND}'s car is idling at ${short(path[0])}, hazard lights on. "Get in, get in!" You're riding to the airport for free.`);
 }
 
+/** Departures: announcements count down, and on arrival the airline counter calls you. */
+function airportTurn(s: GameState, ctx: Ctx, justArrived: boolean) {
+  const left = deadlineOf(s) - s.minutes;
+  if (justArrived) {
+    ctx.facts.push(
+      left > 0
+        ? `You're on the departures kerb. The check-in counter is inside, and it closes at ${formatClock(deadlineOf(s))}: ${left} minute${left === 1 ? "" : "s"} from now.`
+        : "You're on the departures kerb.",
+    );
+    ctx.facts.push(`Announcement: "Passengers for flight ES 940 to proceed to check-in counters C1 to C6. Check-in closes at 8:55 PM."`);
+    if (s.battery > 0 && left > 0 && !s.flags.includes("decision:staff_call")) {
+      s.flags.push("decision:staff_call");
+      s.pending = { id: "staff_call", ...findEncounter("staff_call")!.offer(s) };
+    }
+    return;
+  }
+  for (const at of [10, 5, 2]) {
+    if (left <= at && left > 0 && !s.flags.includes(`announce:${at}`)) {
+      s.flags.push(`announce:${at}`);
+      ctx.facts.push(
+        at === 2
+          ? `Announcement: "Last and final call for ES 940. Check-in closes in ${left} minute${left === 1 ? "" : "s"}."`
+          : `Announcement: "Final call for check-in, flight ES 940. Counters close in ${left} minutes."`,
+      );
+      break;
+    }
+  }
+}
+
 /** The airline's final-call SMS, once, as the deadline gets close. */
 function finalCall(s: GameState, ctx: Ctx) {
-  const left = CHECKIN_CLOSES - s.minutes;
+  const left = deadlineOf(s) - s.minutes;
   if (left > FINAL_CALL_AT || left <= 0 || s.flags.includes("final_call") || s.location === "airport") return;
   s.flags.push("final_call");
   if (s.battery > 0) ctx.facts.push(`SMS from the airline: "FINAL CALL. Check-in for ES 940 closes in ${left} minutes."`);
@@ -792,10 +821,11 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
   }
   const wasRiding = s.ride !== null;
 
-  // At the airport the only way forward is the counter. Whatever a misread move comes back as
-  // ("other", "wait", "hire"...), it resolves as the check-in, so the player can never get stuck
-  // on the curb while the clock runs out. Shopping, charging and giving up stay their own moves.
-  if (s.location === "airport" && !s.ride && !["buy", "charge", "give_up", "check_in"].includes(action.kind)) {
+  // At the airport the only way forward is the counter, so any move that means "go somewhere"
+  // (walking, hailing something, "keep going", getting out) is the rush to check-in: a misread
+  // "run inside" can't strand you on the kerb. Everything else (chai, coffee, shopping, a call, a
+  // wait, chatting) stays itself and costs its minutes: dawdling at the airport can lose the flight.
+  if (s.location === "airport" && !s.ride && ["walk", "hire", "continue", "leave_ride"].includes(action.kind)) {
     action = { ...action, kind: "check_in" };
   }
 
@@ -875,7 +905,7 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
 
   // "Keep going" skips the boring part: ride on, stop by stop, until you arrive, something happens,
   // the city asks you something, your friend is there, or check-in closes.
-  for (let stop = 1; action.kind === "continue" && !opts.oneStop && s.ride && !event && !s.pending && s.status === "playing" && s.minutes <= CHECKIN_CLOSES; stop++) {
+  for (let stop = 1; action.kind === "continue" && !opts.oneStop && s.ride && !event && !s.pending && s.status === "playing" && s.minutes <= deadlineOf(s); stop++) {
     if (s.meet && s.ride.transport !== "lift" && s.location === s.meet.place) break;
     const m = advanceRide(s, ctx);
     turnMinutes += m;
@@ -899,35 +929,32 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
   else if (batteryBefore > BATTERY.lowWarning && s.battery <= BATTERY.lowWarning)
     ctx.facts.push(`Low battery warning: ${s.battery}%.`);
 
-  // Arriving is checking in: dropped at departures, you run straight for the counter in the same turn,
-  // so no turn (and no minutes) is lost typing "check in".
-  if (s.status === "playing" && !ctx.checkIn && !s.ride && s.location === "airport" && prev.location !== "airport") {
-    ctx.checkIn = true;
-    const dash = s.battery > 0 ? CHECKIN_MINUTES : CHECKIN_MINUTES + NO_PHONE_CHECKIN_PENALTY;
-    ctx.facts.push(
-      s.battery > 0
-        ? "You run from the drop-off straight into the check-in queue, e-ticket open on your phone."
-        : "Your phone is dead, so there's no e-ticket. The gate sends you to the airline desk for a printout first.",
-    );
-    s.minutes += dash;
-    turnMinutes += dash;
+  // The airport: arriving isn't checking in. You're on the departures kerb; the counter is inside, and the
+  // evening ends only when you rush for it (or the clock runs out while you dawdle).
+  if (s.status === "playing" && !ctx.checkIn && s.location === "airport") {
+    // Sitting down for chai, browsing, waiting: the minutes go, and the ending will say where.
+    if (prev.location === "airport" && ["buy", "use_item", "wait", "other"].includes(action.kind) && !s.flags.includes("airport_snack")) s.flags.push("airport_snack");
+    airportTurn(s, ctx, prev.location !== "airport");
   }
 
   if (s.status === "playing") {
+    const closes = formatClock(deadlineOf(s));
     if (ctx.checkIn) {
-      if (s.minutes <= CHECKIN_CLOSES) {
+      if (s.minutes <= deadlineOf(s)) {
         s.status = "won";
-        s.endReason = `At the counter at ${formatClock(s.minutes)}, with ${CHECKIN_CLOSES - s.minutes} minutes to spare.`;
+        s.endReason = `At the counter at ${formatClock(s.minutes)}, with ${deadlineOf(s) - s.minutes} minutes to spare.`;
       } else {
         s.status = "lost";
-        s.endReason = `You reach the counter at ${formatClock(s.minutes)}. It closed at 8:55 PM.`;
+        s.endReason = `You reach the counter at ${formatClock(s.minutes)}. It closed at ${closes}.`;
       }
-    } else if (s.minutes > CHECKIN_CLOSES) {
+    } else if (s.minutes > deadlineOf(s)) {
       s.status = "lost";
       s.endReason =
         s.location === "airport"
-          ? `It's ${formatClock(s.minutes)}. You made it to the airport, but check-in closed at 8:55 PM.`
-          : `It's ${formatClock(s.minutes)} and you're still at ${short(s.location)}. Check-in closed at 8:55 PM.`;
+          ? s.flags.includes("airport_snack")
+            ? `It's ${formatClock(s.minutes)}. You were inside the terminal, but that airport snack cost you the flight. Check-in closed at ${closes}.`
+            : `It's ${formatClock(s.minutes)}. You made it to the airport, but never reached the counter. Check-in closed at ${closes}.`
+          : `It's ${formatClock(s.minutes)} and you're still at ${short(s.location)}. Check-in closed at ${closes}.`;
     } else if (isStranded(s)) {
       s.status = "lost";
       s.endReason = `Stranded at ${short(s.location)} at ${formatClock(s.minutes)} with ${describeWallet(s)}. Nothing you can pay for gets you any closer to the airport.`;

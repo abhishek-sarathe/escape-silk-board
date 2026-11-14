@@ -166,7 +166,7 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
       saveCompact(!v);
       return !v;
     });
-  const left = minutesLeft(state.minutes);
+  const left = minutesLeft(state.minutes, state.grace ?? 0);
   const playing = state.status === "playing";
   const urgent = playing && left <= 15;
   const hurry = playing && left <= 30;

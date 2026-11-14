@@ -3,6 +3,7 @@ import { totalMoney } from "./money";
 import { blankAction, parseLocally } from "@/ai/localParser";
 import { normalise } from "@/ai/referee";
 import { newGame, resolveTurn } from "./engine";
+import { findEncounter } from "./encounters";
 import { CHECKIN_CLOSES } from "./rules";
 import type { Action, GameState } from "./types";
 
@@ -177,22 +178,57 @@ describe("Evals Suite: Core Game Dimensions", () => {
       for (let seed = 0; seed < 40; seed++) {
         let s = ride(resolveTurn(newGame(seed), act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" })).state);
         if (s.status === "playing" && s.location === "hebbal") s = ride(resolveTurn(s, act({ kind: "hire", transport: "bus", destination: "airport" })).state);
+        // Arriving isn't checking in: rush for the counter.
+        if (s.status === "playing" && s.location === "airport") s = resolveTurn(s, act({ kind: "check_in" })).state;
         if (s.status === "won") {
           wins++;
           expect(s.location).toBe("airport");
-          expect(s.minutes).toBeLessThanOrEqual(CHECKIN_CLOSES);
+          expect(s.minutes).toBeLessThanOrEqual(CHECKIN_CLOSES + (s.grace ?? 0));
         }
       }
       expect(wins).toBeGreaterThan(15); // ~19/40 taking every default answer; sensible answers win ~75% (balance.ts)
     });
 
-    it("eval: arriving with a minute left wins; arriving after 8:55 PM loses", () => {
-      const onTime = { ...newGame(5), location: "yelahanka" as const, minutes: 100, ride: { transport: "cab" as const, destination: "airport" as const } };
-      const r = resolveTurn(onTime, act({ kind: "continue" }));
-      expect(r.state.location).toBe("airport");
-      if (r.state.minutes <= CHECKIN_CLOSES) expect(r.state.status).toBe("won");
-      else expect(r.state.status).toBe("lost");
-      expect(r.outcome.facts.join(" ")).toMatch(/check-in queue|printout/);
+    it("eval: arriving isn't the end: you're on the kerb, the counter calls, and you must rush in", () => {
+      const s = { ...newGame(5), location: "yelahanka" as const, visited: ["silk_board" as const, "yelahanka" as const], minutes: 90, ride: { transport: "cab" as const, destination: "airport" as const } };
+      const arrived = resolveTurn(s, act({ kind: "continue" }));
+      expect(arrived.state.location).toBe("airport");
+      expect(arrived.state.status).toBe("playing");
+      expect(arrived.state.pending?.id).toBe("staff_call");
+      expect(arrived.outcome.facts.join(" ")).toMatch(/departures kerb/);
+      const rushed = resolveTurn(arrived.state, act({ kind: "check_in" }));
+      expect(rushed.state.status).toBe("won");
+    });
+
+    it("eval: a minute left on arrival still wins if you rush straight in", () => {
+      const s = { ...newGame(5), location: "airport" as const, minutes: CHECKIN_CLOSES - 1, flags: ["decision:staff_call"] };
+      expect(resolveTurn(s, act({ kind: "check_in" })).state.status).toBe("won");
+    });
+
+    it("eval: dawdling over chai at the airport can lose you the flight, and the ending says so", () => {
+      const s = { ...newGame(5), location: "airport" as const, minutes: CHECKIN_CLOSES - 3, flags: ["decision:staff_call"] };
+      const { state } = resolveTurn(s, act({ kind: "buy", items: ["chai"] }));
+      const late = state.status === "playing" ? resolveTurn(state, act({ kind: "wait", minutes: 5 })).state : state;
+      expect(late.status).toBe("lost");
+      expect(late.endReason).toMatch(/airport snack cost you the flight/);
+    });
+
+    it("eval: asking the counter to hold can buy five minutes", () => {
+      let held = 0;
+      for (let seed = 0; seed < 20; seed++) {
+        const s = { ...newGame(seed), location: "airport" as const, minutes: 112 };
+        s.pending = { id: "staff_call", ...findEncounter("staff_call")!.offer(s) };
+        const { state } = resolveTurn(s, act({ kind: "choose", choice: "hold" }));
+        if ((state.grace ?? 0) === 5) held++;
+      }
+      expect(held).toBeGreaterThan(3);
+      expect(held).toBeLessThan(17);
+    });
+
+    it("eval: announcements count down at the airport", () => {
+      const s = { ...newGame(5), location: "airport" as const, minutes: CHECKIN_CLOSES - 12, flags: ["decision:staff_call"] };
+      const { outcome } = resolveTurn(s, act({ kind: "wait", minutes: 3 }));
+      expect(outcome.facts.join(" ")).toMatch(/Announcement: "Final call for check-in/);
     });
   });
 

@@ -66,8 +66,8 @@ export default function EndCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const won = state.status === "won";
-  const gap = Math.abs(CHECKIN_CLOSES - state.minutes);
-  const gaveUp = !won && state.minutes <= CHECKIN_CLOSES;
+  const gap = Math.abs(CHECKIN_CLOSES + (state.grace ?? 0) - state.minutes);
+  const gaveUp = !won && state.minutes <= CHECKIN_CLOSES + (state.grace ?? 0) && !state.endReason?.startsWith("Stranded");
   const newBest = won && record?.best === gap;
   const routeText = state.visited.map((id) => PLACES[id].short).join(" → ");
 

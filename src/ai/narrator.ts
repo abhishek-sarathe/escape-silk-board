@@ -48,7 +48,7 @@ function snapshot(s: GameState): string {
     ? ` In the ${s.ride.line ? `${s.ride.line} ` : ""}${TRANSPORT[s.ride.transport].label} heading to ${PLACES[s.ride.destination].short}.`
     : " On foot.";
   const bag = s.inventory.length ? s.inventory.map((i) => ITEMS[i].label).join(", ") : "empty";
-  return `${formatClock(s.minutes)} (${formatDuration(minutesLeft(s.minutes))} until check-in closes). Battery ${s.battery}%. Money: ${describeWallet(s)}. At ${PLACES[s.location].name}.${ride} Bag: ${bag}.${s.raining ? " It is raining." : ""}`;
+  return `${formatClock(s.minutes)} (${formatDuration(minutesLeft(s.minutes, s.grace ?? 0))} until check-in closes). Battery ${s.battery}%. Money: ${describeWallet(s)}. At ${PLACES[s.location].name}.${ride} Bag: ${bag}.${s.raining ? " It is raining." : ""}`;
 }
 
 function prompt(after: GameState, input: string, outcome: Outcome, lookups: string[]): string {

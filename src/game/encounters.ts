@@ -5,7 +5,7 @@ import { isBus } from "./buses";
 import { PLACES, edgeBetween, kmToAirport, route } from "./map";
 import { describeWallet, spendable } from "./money";
 import type { Rng } from "./rng";
-import { BATTERY, MAX_INVENTORY } from "./rules";
+import { BATTERY, CHECKIN_CLOSES, MAX_INVENTORY } from "./rules";
 import type { Decision, GameState, LocationId, Transport } from "./types";
 
 /** What an encounter may do to the world, provided by the engine. */
@@ -172,6 +172,44 @@ export const ENCOUNTERS: EncounterSpec[] = [
         s.cash += 30;
         k.fact("The samosa changes hands for ₹30. The kid looks at you like you've given him the moon.");
       }
+    },
+  },
+  // --- The airport: never rolled at random; the engine asks this one the moment you arrive. ---
+  {
+    id: "staff_call",
+    canHappen: () => false,
+    offer: (s) => {
+      const left = CHECKIN_CLOSES + (s.grace ?? 0) - s.minutes;
+      return {
+        prompt: `Your phone rings. "Hello, passenger for ES 940? This is Priya from the airline counter. We close in ${left} minute${left === 1 ? "" : "s"}. Where are you?"`,
+        options: [
+          { key: "running", label: "\"At Departures! Running in now!\"" },
+          { key: "hold", label: "\"Please hold the counter for me!\"" },
+          { key: "coffee", label: "\"Five minutes, I'm grabbing a coffee\"" },
+        ],
+        fallback: "running",
+      };
+    },
+    resolve: (s, key, k) => {
+      if (key === "hold") {
+        if (k.rng() < 0.5) {
+          s.grace = (s.grace ?? 0) + 5;
+          return k.fact('Priya sighs. "Five minutes. Not one more." The counter will stay open until 9:00 PM for you.');
+        }
+        return k.fact('"Sorry, the system closes on its own," says Priya. Click.');
+      }
+      if (key === "coffee") {
+        k.minutes(6);
+        s.flags.push("airport_snack");
+        const price = 25 * 3;
+        if (spendable(s) >= price && s.inventory.length < MAX_INVENTORY) {
+          k.pay(price);
+          s.inventory.push("coffee");
+          return k.fact(`Priya goes very quiet. You buy a ₹${price} airport coffee anyway. It takes 6 minutes.`);
+        }
+        return k.fact("Priya goes very quiet. You stand in the coffee queue for 6 minutes and can't afford the coffee.");
+      }
+      k.fact('"Run!" says Priya, and hangs up.');
     },
   },
   // --- BMTC chaos: the bus is never just a bus. ---

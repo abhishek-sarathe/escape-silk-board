@@ -9,8 +9,11 @@ export function formatClock(minutes: number): string {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
 
-export function minutesLeft(minutes: number): number {
-  return CHECKIN_CLOSES - minutes;
+/** When check-in closes tonight: 8:55 PM, plus any minutes the counter agreed to hold for you. */
+export const deadlineOf = (s: { grace?: number }) => CHECKIN_CLOSES + (s.grace ?? 0);
+
+export function minutesLeft(minutes: number, grace = 0): number {
+  return CHECKIN_CLOSES + grace - minutes;
 }
 
 export function formatDuration(minutes: number): string {

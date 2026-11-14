@@ -102,7 +102,7 @@ function lookAround(s: GameState) {
   return {
     at: PLACES[s.location].name,
     clock: formatClock(s.minutes),
-    minutes_until_checkin_closes: minutesLeft(s.minutes),
+    minutes_until_checkin_closes: minutesLeft(s.minutes, s.grace ?? 0),
     cash: s.cash,
     upi: s.upi ?? 0,
     upi_usable: s.battery > 0,
@@ -193,7 +193,7 @@ type Trip = { legs: Leg[]; fare: number; minutes: number };
 
 /** Best one- and two-leg itineraries, ranked by cost or time. Estimates before rain and city events. */
 function bestTrips(s: GameState, to: LocationId, prefer: "cheapest" | "fastest"): Trip[] {
-  const left = minutesLeft(s.minutes);
+  const left = minutesLeft(s.minutes, s.grace ?? 0);
   const budget = spendable(s) + (s.inventory.includes("samosa") ? SAMOSA_FARE_COVER : 0);
   const trips: Trip[] = [];
   for (const leg of legs(s, s.location, to)) trips.push({ legs: [leg], fare: leg.fare, minutes: leg.minutes });
@@ -212,7 +212,7 @@ function bestTrips(s: GameState, to: LocationId, prefer: "cheapest" | "fastest")
 
 function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") {
   if (to === s.location) return { error: "Already there." };
-  const left = minutesLeft(s.minutes);
+  const left = minutesLeft(s.minutes, s.grace ?? 0);
   const best = bestTrips(s, to, prefer);
   return {
     note: "Rough estimates before rain, hold-ups and haggling.",

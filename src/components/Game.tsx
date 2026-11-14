@@ -85,7 +85,7 @@ export default function Game() {
       setToken(data.token);
       setDelta(data.outcome.delta);
       if (data.state.status !== "playing") {
-        setRecord(saveResult(data.state.status === "won", CHECKIN_CLOSES - data.state.minutes));
+        setRecord(saveResult(data.state.status === "won", CHECKIN_CLOSES + (data.state.grace ?? 0) - data.state.minutes));
         setShowEnd(true);
       }
       setEntries((prev) => [...prev, entry({ kind: "narrator", text: data.narration, at: data.state.minutes, outcome: data.outcome, trace: data.trace })]);
