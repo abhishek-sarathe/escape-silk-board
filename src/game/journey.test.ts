@@ -36,3 +36,18 @@ describe("the journey the route map draws", () => {
     expect(pub.journey).toEqual(s.journey);
   });
 });
+
+describe("the AI remembers the evening", () => {
+  it("the referee/agent briefing carries the route, what happened where, and recent exchanges", async () => {
+    const { context } = await import("@/ai/referee");
+    let s: GameState = newGame(3);
+    for (let i = 0; i < 12 && s.status === "playing" && !(s.marks?.length); i++) {
+      s = resolveTurn(s, act(s.pending ? { kind: "choose", choice: s.pending.fallback } : { kind: "wait", minutes: 5 })).state;
+    }
+    s.history = [{ input: "haggle with the auto anna", narration: "He laughs and asks for ₹400." }];
+    const brief = context(s);
+    expect(brief).toMatch(/EARLIER TONIGHT/);
+    expect(brief).toContain(s.marks![0].text);
+    expect(brief).toMatch(/Player: haggle with the auto anna/);
+  });
+});

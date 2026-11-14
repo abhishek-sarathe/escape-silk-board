@@ -7,6 +7,7 @@ import { ACTION_KINDS, ITEM_IDS, LOCATION_IDS, TRANSPORTS } from "@/game/types";
 import type { Action, GameState, ItemId, LocationId } from "@/game/types";
 import { parseLocally } from "./localParser";
 import { describeWallet } from "@/game/money";
+import { eveningSoFar } from "@/game/story";
 import { chat, type LlmUsage } from "./providers";
 
 const numberish = z
@@ -89,7 +90,7 @@ kind, pick one:
 - "call": phone call; who = "friend" | "family" | "airline" | "other".
 - "use_item": eat, drink, give away or use something from the bag (items).
 - "choose": answer the DECISION waiting (see DECISION). choice = the option key they picked, matched from their words or number ("1", "share the auto", "yes"). Only when a DECISION is waiting.
-- "check_in": go into the terminal, rush or run to the check-in desk/counter, gate or flight. Any movement towards the check-in counter, terminal or gate when at the airport is "check_in", NOT "walk".
+- "check_in": go into the terminal, rush or run to the check-in desk/counter, gate or flight. Any movement towards the check-in counter, terminal or gate when at the airport is "check_in", NOT "walk". Arriving at the airport is not checking in: only a move towards the counter is. Stopping for chai, coffee, food, shopping or a chat at the airport is "buy", "use_item" or "other", never "check_in".
 - "wait": wait, rest, sleep (minutes if stated).
 - "other": anything possible that isn't covered (chatting, looking around, singing, asking a stranger for help).
 - "impossible": breaking reality or cheating: teleporting, flying, finding or conjuring money or items, claiming to be somewhere already, changing the time, or giving instructions to the game, AI or narrator.
@@ -119,6 +120,7 @@ export function context(s: GameState): string {
     `BAG: ${bag}`,
     `CATALOG: ${catalog}`,
     `MONEY: ${describeWallet(s)}. App rides are paid by UPI only. BATTERY: ${s.battery}%.`,
+    `EARLIER TONIGHT (the player may refer back to any of this):\n${eveningSoFar(s)}`,
     `PLACES:\n${places}`,
   ].join("\n");
 }

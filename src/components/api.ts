@@ -15,6 +15,8 @@ export interface TurnResponse extends NewGameResponse {
   /** The Game Master agent's tool calls this turn ("How Anna decided"). */
   trace: { tool: string; args: Record<string, unknown>; result: string }[];
   via: { referee: string; narrator: string };
+  /** The narrator's playful ideas for the next move. */
+  moves?: string[];
 }
 
 /** The server gives a turn about 35 s at most; past this the browser stops waiting. */

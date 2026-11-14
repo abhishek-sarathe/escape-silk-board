@@ -1,6 +1,6 @@
 # Escape Silk Board
 
-It's 7:00 PM at Silk Board junction. Your flight leaves at 9:40 and check-in closes at 8:55. You have ₹500, 32% battery and one cold samosa. Type anything; the city answers.
+It's 7:00 PM at Silk Board junction. Your flight leaves at 9:40 and check-in closes at 8:55. You have ₹120 in cash, ₹380 on UPI (only while your phone lives), 24% battery and one cold samosa. Type anything; the city answers.
 
 ## Run it
 
@@ -78,7 +78,7 @@ The map (`src/components/BengaluruMap.tsx`) is the one thing this game is built 
 Eleven real places and three ways north: the Outer Ring Road (HSR, Marathahalli, KR Puram, then Hennur or Hebbal), through the centre (Koramangala, MG Road), and the back way out east via Hoskote. From Hebbal the NH-44 runs past Yelahanka with a ₹120 toll for cabs and autos. From Hennur the Hennur–Bagalur road goes straight up. The Hoskote road is toll-free. Autos haggle, and cabs and bike taxis need a living phone and charge surge prices. The city helps as well as hinders: a stranger may offer a lift, or a constable may wave your lane through.
 
 - **Distances** are real road distances from OpenStreetMap routing (OSRM).
-- **7 PM drive times** are empty-road times multiplied by a traffic factor per kind of road. TomTom's 2025 index puts Bengaluru's evening rush at ×2.15. At that, almost nobody makes check-in, so the factors are tuned down until scripted players win a little over half the time (about 56%; first-time players win less) (`src/game/balance.ts`, enforced by `balance.test.ts`).
+- **7 PM drive times** are empty-road times multiplied by a traffic factor per kind of road. TomTom's 2025 index puts Bengaluru's evening rush at ×2.15. At that, almost nobody makes check-in, so the factors are tuned down until scripted players win a little over half the time (about 52%; first-time players win less) (`src/game/balance.ts`, enforced by `balance.test.ts`).
 - **Buses** get the real Outer Ring Road bus priority lane between Silk Board and KR Puram.
 
 The rules' numbers are in `src/game/rules.ts`.
@@ -87,7 +87,7 @@ The rules' numbers are in `src/game/rules.ts`.
 
 **Money and phone:** you start with ₹120 in cash and ₹380 on UPI (`src/game/money.ts`). UPI works only while the phone has charge, and app rides (cab, bike taxi) take UPI only; autos, buses and shops take either, UPI first. The phone starts at 24% and drains as the evening goes, so a dead phone locks most of your money. Charging at a shop costs time; a cab charges you on the way but costs more. Run out of money that works, with no free way on, and the evening ends: stranded. In simulation, about a third of losses now come from money or the phone instead of the clock.
 
-**Winning:** be in the check-in queue by 8:55 PM. Arriving at departures runs you straight in (a 1-minute dash) in the same turn, so reaching the airport with a minute left is a win. A dead phone means no e-ticket: 12 more minutes at the airline desk for a printout.
+**Winning:** be in the check-in queue by 8:55 PM. Reaching the airport isn't enough: you're dropped on the departures kerb and must rush for the counter yourself (a 1-minute dash, so arriving with a minute left still wins if you go straight in). On arrival the airline counter calls you: say you're running in, beg them to hold the counter (it works half the time: 5 more minutes), or grab a coffee first. Announcements count down the last minutes. Chai, coffee, shopping or waiting at the airport costs real minutes, and if it costs you the flight the ending says so. A dead phone means no e-ticket: 12 more minutes at the airline desk for a printout.
 
 At each stop the city may throw something at you (`src/game/encounters.ts`). The chance is higher in the last 30 minutes, and an airline "final call" SMS arrives with 20 minutes left. Some throws are happenings: rain, a VIP convoy, a stranger's free lift, a constable's green wave. Others are **decisions**, shown as buttons:
 

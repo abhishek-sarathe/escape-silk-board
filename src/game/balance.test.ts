@@ -7,8 +7,8 @@ describe("balance: a well-played evening is a coin flip", () => {
   const average = values.reduce((a, b) => a + b, 0) / values.length;
 
   it("sensible players win about half the time on average", () => {
-    // Raised from 40-60% once arriving at the airport became check-in: scripted players are sharper
-    // than first-time humans, so they should win a little more than half.
+    // 45-65%: scripted players know good routes and rush straight to the counter, so they should win a
+    // little more than first-time humans. Money, the phone and BMTC surprises take their share.
     expect(average).toBeGreaterThan(0.45);
     expect(average).toBeLessThan(0.65);
   });

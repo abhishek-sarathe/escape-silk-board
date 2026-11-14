@@ -27,6 +27,8 @@ export default function Game() {
   const [showEnd, setShowEnd] = useState(true);
   /** Moves the server worked out from the route planner for this turn. */
   const [planned, setPlanned] = useState<string[]>([]);
+  /** The narrator's playful ideas for this turn. */
+  const [aiMoves, setAiMoves] = useState<string[]>([]);
   /** What the move buttons showed last turn, so this turn can offer something different. */
   const [lastShown, setLastShown] = useState<string[]>([]);
   const ids = useRef(0);
@@ -44,6 +46,7 @@ export default function Game() {
       setDelta(null);
       setRecord(readRecord());
       setPlanned(data.suggestions ?? []);
+      setAiMoves([]);
       setLastShown([]);
       setEntries([{ id: ids.current++, kind: "narrator", text: data.narration, at: 0 }]);
       // A shared ?seed= link replays that evening once; after that the address is clean, so a reload
@@ -81,6 +84,7 @@ export default function Game() {
       const data = await playTurn(token, said, auto);
       setLastShown(moves);
       setPlanned(data.suggestions ?? []);
+      setAiMoves(data.moves ?? []);
       setState(data.state);
       setToken(data.token);
       setDelta(data.outcome.delta);
@@ -100,7 +104,7 @@ export default function Game() {
 
   const over = state && state.status !== "playing";
   // A waiting decision shows exactly its options; otherwise mix planned moves with fresh local ideas.
-  const moves = !state ? [] : state.pending ? suggest(state) : mixMoves(planned, suggest(state, 8), lastShown);
+  const moves = !state ? [] : state.pending ? suggest(state) : mixMoves(planned, [...aiMoves, ...suggest(state, 8)], lastShown);
 
   // On a ride with nothing to decide, the city doesn't wait for you: after a quiet spell the ride moves on
   // by itself. Typing anything, or the tab being hidden, holds it (so an idle tab doesn't spend AI calls).

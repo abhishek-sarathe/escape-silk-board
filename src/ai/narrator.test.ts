@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_WORDS, capLength } from "./narrator";
+import { MAX_WORDS, capLength, splitMoves } from "./narrator";
 
 const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 
@@ -26,5 +26,22 @@ describe("narration length cap", () => {
     const out = capLength(withChoice, true);
     expect(out.endsWith("Share an auto for ₹60, or wait for the next bus?")).toBe(true);
     expect(out.startsWith("You board the 281-AP bus")).toBe(true);
+  });
+});
+
+describe("the narrator's suggested moves", () => {
+  it("splits the MOVES line off the story", () => {
+    const { story, moves } = splitMoves("The auto anna laughs. You're at HSR.\nMOVES: Ask him for a discount | Offer the samosa | Wave at the bus");
+    expect(story).toBe("The auto anna laughs. You're at HSR.");
+    expect(moves).toEqual(["Ask him for a discount", "Offer the samosa", "Wave at the bus"]);
+  });
+
+  it("drops moves with numbers (prices or times the engine didn't give) and overlong ones", () => {
+    const { moves } = splitMoves("Story.\nMOVES: Offer ₹100 | Ask for a ride | " + "x".repeat(60));
+    expect(moves).toEqual(["Ask for a ride"]);
+  });
+
+  it("works without a MOVES line", () => {
+    expect(splitMoves("Just the story.")).toEqual({ story: "Just the story.", moves: [] });
   });
 });

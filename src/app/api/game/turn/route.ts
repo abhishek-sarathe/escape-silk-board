@@ -104,6 +104,7 @@ export async function POST(request: Request) {
     next.notes = referee.notes;
     const narrator = await withDeadline(narrate(next, said, outcome, referee.lookups), NARRATE_BUDGET_MS, () => ({
       text: plainNarration(outcome, next),
+      moves: [],
       via: "plain (slow AI)",
       usage: null,
     }));
@@ -122,5 +123,7 @@ export async function POST(request: Request) {
     trace: referee.trace,
     via: { referee: referee.via, narrator: narrator.via },
     suggestions: nextMoves(next),
+    /** The narrator's playful ideas for what to try next (plain text; the agent reads them like anything typed). */
+    moves: narrator.moves,
   });
 }

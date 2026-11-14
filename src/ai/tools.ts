@@ -6,7 +6,7 @@ import { busLink, busSpeed, isBus, type BusType } from "@/game/buses";
 import { fixedFare, meterFare } from "@/game/engine";
 import { describeWallet, spendable } from "@/game/money";
 import { PLACES, edgeBetween, findPlace, kmToAirport, neighbors, pathKm, route, tollOn } from "@/game/map";
-import { BUS_LANE, ITEMS, MAX_WALK_KM, SAMOSA_FARE_COVER, TRANSPORT, WALK_MIN_PER_KM } from "@/game/rules";
+import { BUS_LANE, CHECKIN_MINUTES, ITEMS, MAX_WALK_KM, SAMOSA_FARE_COVER, TRANSPORT, WALK_MIN_PER_KM } from "@/game/rules";
 import { ACTION_KINDS, LOCATION_IDS, TRANSPORTS, type GameState, type LocationId, type Transport } from "@/game/types";
 import type { ToolSpec } from "./providers";
 
@@ -204,7 +204,7 @@ function bestTrips(s: GameState, to: LocationId, prefer: "cheapest" | "fastest")
   }
   // Cheapest means cheapest among trips that still make check-in, if any do.
   const usable = trips.filter((t) => t.fare <= budget);
-  const inTime = usable.filter((t) => t.minutes <= left);
+  const inTime = usable.filter((t) => t.minutes + CHECKIN_MINUTES <= left);
   const pool = prefer === "cheapest" && inTime.length ? inTime : usable;
   const rank = prefer === "cheapest" ? (t: Trip) => t.fare * 1000 + t.minutes : (t: Trip) => t.minutes * 1000 + t.fare;
   return pool.sort((x, y) => rank(x) - rank(y)).slice(0, 4);
@@ -222,7 +222,7 @@ function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") 
       steps: t.legs.map((l) => `${l.how} to ${place(l.to)} (₹${l.fare}, ~${l.minutes} min)`),
       total_fare: t.fare,
       rough_minutes: t.minutes,
-      makes_checkin: t.minutes <= left,
+      makes_checkin: t.minutes + CHECKIN_MINUTES <= left,
     })),
   };
 }
