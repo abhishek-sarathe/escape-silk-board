@@ -345,3 +345,18 @@ describe("cash and UPI", () => {
     expect(resolveTurn(s, act({ kind: "wait", minutes: 2 })).state.status).toBe("playing");
   });
 });
+
+describe("a fare you can't cover", () => {
+  it("says what you have in both pots and exactly how much you're short", () => {
+    // The real case: ₹495 bike taxi from Koramangala with ₹330 UPI + ₹120 cash = ₹450.
+    const s: GameState = { ...newGame(4), location: "koramangala", visited: ["silk_board", "koramangala"], cash: 120, upi: 330 };
+    const fare = fixedFare(4, "bike_taxi", "koramangala", "airport")!;
+    const { state, outcome } = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "airport" }));
+    if (fare > 450) {
+      expect(state.ride).toBeNull();
+      expect(outcome.refused.join(" ")).toContain(`You have ₹120 cash and ₹330 on UPI: ₹${fare - 450} short, even paying with both.`);
+    } else {
+      expect(state.ride?.transport).toBe("bike_taxi"); // cash + UPI together cover it
+    }
+  });
+});

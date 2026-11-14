@@ -219,7 +219,7 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
   // Uber and Ola do: UPI first while the phone works, then cash.
   if (price > spendable(s)) {
     ctx.refused.push(
-      `A ${spec.label} from ${short(s.location)} to ${short(dest)} costs ₹${price}. You have ${describeWallet(s)}.`,
+      `A ${spec.label} from ${short(s.location)} to ${short(dest)} costs ₹${price}. You have ${describeWallet(s)}: ₹${price - spendable(s)} short, even paying with both.`,
     );
     ctx.actionMinutes += 2;
     return;
@@ -310,7 +310,7 @@ function busHire(s: GameState, a: Action, ctx: Ctx) {
     return;
   }
   if (shortBy > 0) {
-    ctx.refused.push(`The ${line.name} ${label(type)} from ${short(here)} to ${short(dest)} costs ₹${link.fare}. You have ${describeWallet(s)}.${hints()}`);
+    ctx.refused.push(`The ${line.name} ${label(type)} from ${short(here)} to ${short(dest)} costs ₹${link.fare}. You have ${describeWallet(s)}: ₹${link.fare - spendable(s)} short.${hints()}`);
     ctx.actionMinutes += 2;
     return;
   }
