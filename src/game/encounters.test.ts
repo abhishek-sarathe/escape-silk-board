@@ -123,3 +123,34 @@ describe("BMTC chaos", () => {
     expect(waits).toEqual(new Set(["lucky", "bunched", "usual"]));
   });
 });
+
+describe("a waiting decision doesn't swallow other moves", () => {
+  const atKoramangala = (cash: number, upi: number): Partial<GameState> => ({
+    location: "koramangala",
+    visited: ["silk_board", "koramangala"],
+    cash,
+    upi,
+  });
+
+  it("a refused ride leaves the samosa offer open (the player was talking about the ride)", () => {
+    const s = asked("samosa", atKoramangala(120, 330));
+    const { state, outcome } = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "airport" }));
+    expect(state.ride).toBeNull();
+    expect(state.pending?.id).toBe("samosa"); // still waiting for an answer
+    expect(state.inventory).toContain("samosa");
+    expect(outcome.facts.join(" ")).not.toMatch(/let the moment pass/);
+  });
+
+  it("asking a question or buying chai leaves it open too", () => {
+    const s = asked("samosa", atKoramangala(120, 330));
+    expect(resolveTurn(s, act({ kind: "other", minutes: 2, note: "ask how far the airport is" })).state.pending?.id).toBe("samosa");
+  });
+
+  it("once a ride takes you away, the moment passes", () => {
+    const s = asked("samosa", atKoramangala(120, 380));
+    const { state, outcome } = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "mg_road" }));
+    expect(state.ride !== null || state.location !== "koramangala").toBe(true);
+    expect(state.pending?.id).not.toBe("samosa");
+    expect(outcome.facts.join(" ")).toMatch(/let the moment pass/);
+  });
+});

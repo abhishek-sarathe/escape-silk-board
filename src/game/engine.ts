@@ -814,9 +814,16 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
   const rng = rngFor(s.seed, s.turn, "action");
   const ctx: Ctx = { facts: [], refused: [], actionMinutes: 0, rideMinutes: 0, phoneCost: 0, batteryGain: 0, checkIn: false, justBoarded: false };
 
-  // A decision is waiting: this turn either answers it, or does something else and gets its fallback.
+  // A decision is waiting. Answering it settles it. Doing something else while riding, or moving on,
+  // lets the moment pass (its fallback applies). Doing something else on the spot (a ride that gets
+  // refused, a question, a chai) leaves the card open: the player may be talking about something else.
+  let deferred = false;
   if (s.pending) {
-    if (resolveDecision(s, action, ctx, rng)) ctx.actionMinutes += 1;
+    if (action.kind === "choose" || s.ride) {
+      if (resolveDecision(s, action, ctx, rng)) ctx.actionMinutes += 1;
+    } else {
+      deferred = true;
+    }
   } else if (action.kind === "choose") {
     ctx.refused.push("Nobody is asking you anything right now.");
     ctx.actionMinutes += 1;
@@ -896,6 +903,13 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
       s.status = "lost";
       s.endReason = "You gave up and went home.";
       break;
+  }
+
+  // The card stayed open while the player did something else. If that took them somewhere (a ride that
+  // started, a walk) or ended the evening, the moment has passed now; otherwise it's still waiting.
+  if (deferred && s.pending) {
+    const movedOn = s.location !== prev.location || s.ride !== null || s.status !== "playing" || ctx.checkIn;
+    if (movedOn) resolveDecision(s, action, ctx, rng);
   }
 
   // A vehicle you're already in keeps moving, whatever else you do in it.
