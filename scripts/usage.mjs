@@ -22,7 +22,8 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 if (url && key) {
   const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/rpc/llm_usage_summary`, {
     method: "POST",
-    headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    // Legacy service_role keys are JWTs and also go in Authorization; the newer sb_secret_ keys go in apikey only.
+    headers: { apikey: key, ...(key.startsWith("eyJ") ? { Authorization: `Bearer ${key}` } : {}), "Content-Type": "application/json" },
     body: JSON.stringify({ games }),
   });
   if (!res.ok) {
