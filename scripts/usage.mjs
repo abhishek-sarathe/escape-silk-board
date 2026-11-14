@@ -16,11 +16,12 @@ function print(summary, where) {
   console.table(pct(summary.games ?? []));
 }
 
-const url = process.env.SUPABASE_URL?.trim();
+// Accept the REST endpoint too ("https://x.supabase.co/rest/v1/"): it's an easy one to copy.
+const url = process.env.SUPABASE_URL?.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
 if (url && key) {
-  const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/rpc/llm_usage_summary`, {
+  const res = await fetch(`${url}/rest/v1/rpc/llm_usage_summary`, {
     method: "POST",
     // Legacy service_role keys are JWTs and also go in Authorization; the newer sb_secret_ keys go in apikey only.
     headers: { apikey: key, ...(key.startsWith("eyJ") ? { Authorization: `Bearer ${key}` } : {}), "Content-Type": "application/json" },

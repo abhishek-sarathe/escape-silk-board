@@ -80,7 +80,8 @@ let client: LogClient | null | undefined;
 
 function remote(): LogClient | null {
   if (client !== undefined) return client;
-  const url = process.env.SUPABASE_URL?.trim();
+  // Accept the REST endpoint too ("https://x.supabase.co/rest/v1/"): it's an easy one to copy.
+  const url = process.env.SUPABASE_URL?.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   client = url && key ? (createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) as unknown as LogClient) : null;
   return client;
