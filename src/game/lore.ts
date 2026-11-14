@@ -82,6 +82,7 @@ const CITY_LORE = [
   "Someone in the next car is on a video call, nodding seriously, while a pizza is handed in through their window.",
   "An auto driver is reclining in what looks a lot like a gaming chair.",
   "Above the junction, a Yellow Line metro train glides south towards Electronic City: the one direction you don't need.",
+  "Two strangers at the signal are excitedly comparing photos of the brand-new Pink Line. It runs along Bannerghatta Road, nowhere near the airport.",
 ];
 
 /** Two details for this turn: one of the place, one of the city. Seeded, so replays match. */

@@ -7,6 +7,8 @@
 //  - The Namma Metro Yellow Line (opened August 2025) stops at Central Silk Board but runs south, to
 //    Electronic City. The Blue Line (58 km, Silk Board to the airport) is under construction: Silk Board
 //    to KR Puram targeted around May-June 2027, the airport stretch later (no official BMRCL date).
+//  - The Pink Line's first, elevated stretch (Kalena Agrahara to Tavarekere, ~7.5 km, 6 stations on
+//    Bannerghatta Road) opened in November 2026; the underground part to Nagawara is due ~March 2027.
 
 export interface Gone {
   id: string;
@@ -36,6 +38,12 @@ export const GONE: Gone[] = [
     words: /\byulu\b/i,
     fact: "You find a Yulu e-bike at a dock. It tops out at 25 km/h and has to be parked back in a Yulu zone, so it's not getting you anywhere near the airport tonight.",
     minutes: 3,
+  },
+  {
+    id: "pink line",
+    words: /\bpink\s*(line|metro)\b/i,
+    fact: "The Pink Line has only just opened, and it runs 7.5 km along Bannerghatta Road, Kalena Agrahara to Tavarekere: nowhere near Silk Board's way north. The underground stretch on to Nagawara, near Hennur, isn't due until around March 2027.",
+    minutes: 2,
   },
   {
     id: "metro",
