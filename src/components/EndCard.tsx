@@ -35,7 +35,7 @@ function tripLine(s: PublicState): string {
 
 /** What became of the one cold samosa you started with. */
 function samosaFate(s: PublicState): string {
-  if (s.inventory.includes("samosa")) return "Still in your bag. Cold. Undefeated. 🫓";
+  if (s.inventory.includes("samosa")) return "Still in your bag. Cold. Undefeated. 🫡";
   if (s.flags.includes("traded:samosa")) return "Traded to an auto anna. A legend now rides with him. 🛺";
   if (s.flags.includes("used:samosa")) return "Eaten (or gifted). It gave its all. 🫡";
   return "Lost to the traffic gods. 🙏";

@@ -6,6 +6,7 @@ import type { ItemId, Outcome } from "@/game/types";
 import type { PublicState } from "@/game/view";
 import { describeWallet, spendable } from "@/game/money";
 import { BengaluruMap } from "./BengaluruMap";
+import { ItemIcon } from "./ItemIcon";
 import Scene from "./Scene";
 
 /** Roll a number towards its new value instead of snapping, so every change is seen. */
@@ -30,19 +31,12 @@ function useTween(target: number): number {
   return shown;
 }
 
-const ITEM_ICONS: Record<ItemId, string> = {
-  samosa: "🫓",
-  chai: "☕",
-  coffee: "☕",
-  water: "💧",
-  umbrella: "☂️",
-};
-
+/** "cold samosa, 2× cutting chai": words only (icons are drawn next to it with ItemIcon). */
 function bagSummary(items: ItemId[]): string {
-  if (!items.length) return "Empty 📭";
+  if (!items.length) return "Empty";
   const counts = new Map<ItemId, number>();
   items.forEach((i) => counts.set(i, (counts.get(i) ?? 0) + 1));
-  return [...counts].map(([id, n]) => `${n > 1 ? `${n}× ` : ""}${ITEMS[id].label} ${ITEM_ICONS[id] ?? ""}`).join(", ");
+  return [...counts].map(([id, n]) => `${n > 1 ? `${n}× ` : ""}${ITEMS[id].label}`).join(", ");
 }
 
 function Pop({ turn, text, tone }: { turn: number; text: string | null; tone: string }) {
@@ -238,8 +232,8 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
               <span aria-hidden className={`ml-1 ${upiLocked ? "text-brake line-through" : ""}`}>📱₹{upi}</span>
             </Chip>
             <Chip label={`Bag: ${bagSummary(state.inventory)}`}>
-              <span aria-hidden className="tracking-widest">
-                {state.inventory.length ? state.inventory.map((i) => ITEM_ICONS[i] ?? "•").join("") : "📭"}
+              <span aria-hidden className="inline-flex items-center gap-1">
+                {state.inventory.length ? state.inventory.map((i, n) => <ItemIcon key={`${i}-${n}`} id={i} />) : "📭"}
               </span>
             </Chip>
             {state.quote && <span className="font-mono text-[11px] text-muted">Auto asks ₹{state.quote.ask}</span>}
@@ -270,7 +264,12 @@ export default function Hud({ state, delta, onMove }: { state: PublicState; delt
             <span className={`ml-1.5 text-sm ${upiLocked ? "text-brake line-through" : "text-muted"}`}>+₹{upi}</span>
           </Stat>
           <Stat label="Bag" tint="bg-night text-muted" sub={state.raining ? "It's raining" : "Dry, for now"}>
-            <span className="block whitespace-normal text-xs font-semibold leading-tight">{bagSummary(state.inventory)}</span>
+            <span className="flex flex-wrap items-center gap-1 whitespace-normal text-xs font-semibold leading-tight">
+              {[...new Set(state.inventory)].map((i) => (
+                <ItemIcon key={i} id={i} size={14} />
+              ))}
+              {bagSummary(state.inventory)}
+            </span>
           </Stat>
         </div>
         )}

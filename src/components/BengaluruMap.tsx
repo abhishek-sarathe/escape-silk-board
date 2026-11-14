@@ -10,6 +10,7 @@ import { busLink, BUS_TYPES } from "@/game/buses";
 import { EDGES, PLACES, edgeBetween, kmToAirport, neighbors, route, tollOn } from "@/game/map";
 import { LOCATION_IDS, type JourneyLeg, type LocationId, type MapMark, type Transport } from "@/game/types";
 import type { PublicState } from "@/game/view";
+import { SamosaPaths } from "./ItemIcon";
 
 /** Schematic positions, south-west (Silk Board) to north-east (the airport), plus where each label sits. */
 const AT: Record<LocationId, { x: number; y: number; lx: number; ly: number; anchor: "start" | "middle" | "end" }> = {
@@ -269,9 +270,15 @@ export function BengaluruMap({
             list.map((m, i) => (
               <g key={`${m.id}-${m.minutes}`} transform={`translate(${xy(place).x + 20 + i * 28}, ${xy(place).y - 26})`} className="animate-rise">
                 <circle r={14} fill="#1b1f25" stroke={SODIUM} strokeOpacity={0.6} strokeWidth={1.5} />
-                <text textAnchor="middle" y={5} fontSize={15}>
-                  {PIN[m.id] ?? "❗"}
-                </text>
+                {m.id === "decision:samosa" ? (
+                  <g transform="translate(-9, -9) scale(0.75)">
+                    <SamosaPaths />
+                  </g>
+                ) : (
+                  <text textAnchor="middle" y={5} fontSize={15}>
+                    {PIN[m.id] ?? "❗"}
+                  </text>
+                )}
                 <title>{`${formatClock(m.minutes)} at ${short(place)}: ${m.text}`}</title>
               </g>
             )),
