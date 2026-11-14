@@ -297,16 +297,23 @@ function busHire(s: GameState, a: Action, ctx: Ctx) {
     return;
   }
   const shortBy = link.fare - spendable(s);
-  // A little short? The conductor accepts the samosa for the difference.
+  // A little short? The conductor offers to take the samosa for the difference. The player decides.
   if (shortBy > 0 && shortBy <= SAMOSA_FARE_COVER && s.inventory.includes("samosa")) {
-    const paid = spendable(s);
-    pay(s, paid);
-    removeItem(s, "samosa");
-    s.flags.push("traded:samosa");
+    const wait = busWait(s, link.wait);
+    ctx.actionMinutes += wait;
     ctx.facts.push(
-      `You wait ${link.wait} minutes for ${which}. The ticket to ${short(dest)} is ₹${link.fare}; you have ₹${paid}. The conductor eyes your cold samosa and accepts it for the missing ₹${shortBy}. You board with ₹0 and no samosa.`,
+      `${waitStory(wait, link.wait, line.name)} The ticket to ${short(dest)} is ₹${link.fare}, and you have ${describeWallet(s)}: ₹${shortBy} short.`,
     );
-    startRide(s, ctx, type, dest, link.wait, line);
+    s.pending = {
+      id: "fare_samosa",
+      prompt: `The conductor looks at your money, then at your cold samosa. "₹${shortBy} short... Samosa for the rest? Okay, come."`,
+      options: [
+        { key: "give", label: "Give him the samosa and get on" },
+        { key: "keep", label: "Keep the samosa, let the bus go" },
+      ],
+      fallback: "keep",
+      offer: { transport: type, destination: dest, line: line.name, path: [...line.path], fare: link.fare },
+    };
     return;
   }
   if (shortBy > 0) {
@@ -569,17 +576,8 @@ interface EventSpec {
 }
 
 const EVENTS: EventSpec[] = [
-  // Help, not just hurdles: the city is chaotic, but people are kind.
-  {
-    id: "lift",
-    text: "A stranger offers you a lift.",
-    canHappen: (s) => !s.ride && !s.quote && s.location !== "airport",
-    apply: (s) => {
-      const next = route(s.location, "airport", "auto")![1];
-      s.ride = { transport: "lift", destination: next, path: [s.location, next] };
-      return `A techie in a hatchback, also late for something, pulls over and offers you a free lift to ${short(next)}. You get in.`;
-    },
-  },
+  // Help, not just hurdles: the city is chaotic, but people are kind. (A stranger's lift is an offer the
+  // player answers: see "lift_offer" in encounters.ts.)
   {
     id: "green_wave",
     text: "A traffic constable spots your trolley bag and waves your lane through three signals in a row. Your next stretch by road will be 8 minutes faster.",
@@ -840,8 +838,9 @@ function resolveDecision(s: GameState, action: Action, ctx: Ctx, rng: Rng): bool
     refuse: (t) => ctx.refused.push(t),
     minutes: (n) => (ctx.actionMinutes += n),
     pay: (n) => pay(s, n),
-    board: (t, dest, wait) => startRide(s, ctx, t, dest, wait),
+    board: (t, dest, wait, path, line) => startRide(s, ctx, t, dest, wait, line && path ? { name: line, path } : undefined),
     battery: (n) => (n < 0 ? (ctx.phoneCost -= n) : (ctx.batteryGain += n)),
+    offer: d.offer,
   };
   findEncounter(d.id)?.resolve(s, key, kit);
   return Boolean(chosen);

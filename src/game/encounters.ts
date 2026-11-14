@@ -15,8 +15,11 @@ export interface Kit {
   refuse: (text: string) => void;
   minutes: (n: number) => void;
   pay: (amount: number) => void;
-  board: (transport: Transport, destination: LocationId, wait: number, path?: LocationId[]) => void;
+  /** Start a ride. A bus passes its line name and the stops it runs through. */
+  board: (transport: Transport, destination: LocationId, wait: number, path?: LocationId[], line?: string) => void;
   battery: (delta: number) => void;
+  /** The ride this decision was about, if any (the conductor's samosa offer). */
+  offer?: Decision["offer"];
 }
 
 interface EncounterSpec {
@@ -172,6 +175,48 @@ export const ENCOUNTERS: EncounterSpec[] = [
         s.cash += 30;
         k.fact("The samosa changes hands for ₹30. The kid looks at you like you've given him the moon.");
       }
+    },
+  },
+  // --- Asked by the engine when it applies, never rolled at random. ---
+  {
+    // A bus fare you're a little short of: the conductor offers to take the samosa for the rest.
+    id: "fare_samosa",
+    canHappen: () => false,
+    offer: () => ({ prompt: "", options: [], fallback: "keep" }), // built by the engine (busHire), with the ride it's for
+    resolve: (s, key, k) => {
+      const offer = k.offer;
+      if (key !== "give" || !offer) return k.fact("You keep your samosa. The bus pulls away without you.");
+      const cover = 50;
+      if (!s.inventory.includes("samosa") || spendable(s) + cover < offer.fare) {
+        return k.refuse(`The conductor shakes his head: it's ₹${offer.fare}, and you have ${describeWallet(s)}.`);
+      }
+      k.pay(spendable(s));
+      s.inventory.splice(s.inventory.indexOf("samosa"), 1);
+      s.flags.push("traded:samosa");
+      k.fact(`You hand over everything you have and your cold samosa. The conductor nods, satisfied, and you're on the ${offer.line ?? "bus"}.`);
+      k.board(offer.transport, offer.destination, 0, offer.path, offer.line);
+    },
+  },
+  {
+    // A stranger's free lift: offered, never forced.
+    id: "lift_offer",
+    canHappen: (s) => !s.ride && !s.quote && s.location !== "airport",
+    offer: (s) => {
+      const next = route(s.location, "airport", "auto")![1];
+      return {
+        prompt: `A techie in a hatchback, also late for something, pulls over: "Going towards ${short(next)}? Hop in, free. Quick quick."`,
+        options: [
+          { key: "yes", label: `Hop in, ride to ${short(next)}` },
+          { key: "no", label: "No thanks, I've got a plan" },
+        ],
+        fallback: "no",
+      };
+    },
+    resolve: (s, key, k) => {
+      if (key !== "yes") return k.fact("You wave the techie on. He shrugs and disappears into the jam.");
+      const next = route(s.location, "airport", "auto")![1];
+      k.fact(`You get in. The techie is on a call the whole way and never once asks your name.`);
+      k.board("lift", next, 0);
     },
   },
   // --- The airport: never rolled at random; the engine asks this one the moment you arrive. ---

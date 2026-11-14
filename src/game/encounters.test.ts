@@ -154,3 +154,13 @@ describe("a waiting decision doesn't swallow other moves", () => {
     expect(outcome.facts.join(" ")).toMatch(/let the moment pass/);
   });
 });
+
+describe("the game never decides for the player", () => {
+  it("a stranger's lift is an offer: 'no' keeps you where you are, 'yes' gets you in", () => {
+    const s = asked("lift_offer", { location: "koramangala", visited: ["silk_board", "koramangala"] });
+    expect(s.pending?.prompt).toMatch(/Hop in, free/);
+    expect(resolveTurn(s, act({ kind: "choose", choice: "no" })).state.ride).toBeNull();
+    const yes = resolveTurn(s, act({ kind: "choose", choice: "yes" })).state;
+    expect(yes.ride?.transport === "lift" || yes.location !== "koramangala").toBe(true);
+  });
+});

@@ -4,7 +4,7 @@ import { localColour } from "@/game/lore";
 import { PLACES } from "@/game/map";
 import { ITEMS, TRANSPORT } from "@/game/rules";
 import type { GameState, Outcome } from "@/game/types";
-import { describeWallet } from "@/game/money";
+import { spendable } from "@/game/money";
 import { eveningSoFar } from "@/game/story";
 import { chat, type LlmUsage } from "./providers";
 
@@ -60,7 +60,12 @@ function snapshot(s: GameState): string {
     ? ` In the ${s.ride.line ? `${s.ride.line} ` : ""}${TRANSPORT[s.ride.transport].label} heading to ${PLACES[s.ride.destination].short}.`
     : " On foot.";
   const bag = s.inventory.length ? s.inventory.map((i) => ITEMS[i].label).join(", ") : "empty";
-  return `${formatClock(s.minutes)} (${formatDuration(minutesLeft(s.minutes, s.grace ?? 0))} until check-in closes). Battery ${s.battery}%. Money: ${describeWallet(s)}. At ${PLACES[s.location].name}.${ride} Bag: ${bag}.${s.raining ? " It is raining." : ""}`;
+  // Battery and money in words, not numbers: the screen shows the numbers, and a narrator that has them
+  // tends to recite them ("your phone is at 5% and you have ₹15"). Amounts that matter this turn are in FACTS.
+  const phone = s.battery <= 0 ? "dead" : s.battery <= 10 ? "nearly dead" : s.battery <= 25 ? "low" : "fine";
+  const money = spendable(s) < 50 ? "almost broke" : spendable(s) < 150 ? "tight" : "fine";
+  const upiLocked = s.battery <= 0 && (s.upi ?? 0) > 0 ? " (UPI locked: phone dead)" : "";
+  return `${formatClock(s.minutes)} (${formatDuration(minutesLeft(s.minutes, s.grace ?? 0))} until check-in closes). Phone: ${phone}. Money: ${money}${upiLocked}. At ${PLACES[s.location].name}.${ride} Bag: ${bag}.${s.raining ? " It is raining." : ""}`;
 }
 
 function prompt(after: GameState, input: string, outcome: Outcome, lookups: string[]): string {

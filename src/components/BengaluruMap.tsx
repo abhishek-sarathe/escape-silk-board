@@ -63,6 +63,7 @@ const PIN: Record<string, string> = {
   "decision:passenger": "🗣️",
   "decision:samosa": "🥟",
   "decision:friend": "📞",
+  "decision:lift_offer": "🚗",
   "decision:depot": "🚏",
   "decision:checker": "🎫",
   "decision:race": "🏁",

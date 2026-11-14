@@ -44,7 +44,7 @@ export const STRATEGIES: Record<string, Step[]> = {
 };
 
 /** The obvious good answer to some of the city's questions (others: the default). */
-const SENSIBLE: Record<string, string> = { friend: "yes", passenger: "listen", samosa: "charge" };
+const SENSIBLE: Record<string, string> = { friend: "yes", passenger: "listen", samosa: "charge", fare_samosa: "give", lift_offer: "yes" };
 
 /** Play one evening: each step, then ride to the end of any vehicle it started, then check in. */
 export function play(seed: number, steps: Step[]): GameState {

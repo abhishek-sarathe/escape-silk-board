@@ -281,14 +281,24 @@ describe("the samosa saves a bus fare", () => {
   });
   const bus = { ...blankAction("take the airport bus"), kind: "hire" as const, transport: "airport_bus" as const, destination: "airport" as const };
 
-  it("covers a small shortfall: all your cash plus the samosa", () => {
+  it("a small shortfall: the conductor offers to take the samosa, and the player decides", () => {
     const fare = fixedFare(11, "airport_bus", "mg_road", "airport")!;
-    const { state, outcome } = resolveTurn(atMg(fare - 3), bus);
-    expect(state.ride?.transport).toBe("airport_bus");
-    expect(state.cash).toBe(0);
-    expect(state.inventory).not.toContain("samosa");
-    expect(state.flags).toContain("traded:samosa");
-    expect(outcome.refused).toEqual([]);
+    const asked = resolveTurn(atMg(fare - 3), bus);
+    // Nothing is taken yet: the conductor asks.
+    expect(asked.state.ride).toBeNull();
+    expect(asked.state.inventory).toContain("samosa");
+    expect(asked.state.pending?.id).toBe("fare_samosa");
+    expect(asked.outcome.refused).toEqual([]);
+
+    const gave = resolveTurn(asked.state, act({ kind: "choose", choice: "give" })).state;
+    expect(gave.ride?.transport).toBe("airport_bus");
+    expect(gave.cash).toBe(0);
+    expect(gave.inventory).not.toContain("samosa");
+    expect(gave.flags).toContain("traded:samosa");
+
+    const kept = resolveTurn(asked.state, act({ kind: "choose", choice: "keep" })).state;
+    expect(kept.ride).toBeNull();
+    expect(kept.inventory).toContain("samosa");
   });
 
   it("can't cover a big shortfall, and needs an actual samosa", () => {
