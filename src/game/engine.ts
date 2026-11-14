@@ -217,7 +217,25 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
   const price = fixedFare(s.seed, transport, s.location, dest)!;
   // App rides need a living phone to book (checked above), but the rider takes cash or UPI, like Rapido,
   // Uber and Ola do: UPI first while the phone works, then cash.
-  if (price > spendable(s)) {
+  const shortBy = price - spendable(s);
+  // A little short? The rider eyes the samosa, same as a bus conductor would. The player decides.
+  if (shortBy > 0 && shortBy <= SAMOSA_FARE_COVER && s.inventory.includes("samosa")) {
+    ctx.actionMinutes += 1;
+    ctx.facts.push(`The ${spec.label} to ${short(dest)} is ₹${price}, and you have ${describeWallet(s)}: ₹${shortBy} short.`);
+    s.pending = {
+      id: "fare_samosa",
+      prompt: `The ${spec.label} driver looks at your money, then at your cold samosa. "₹${shortBy} short... Samosa for the rest? Okay, sit."`,
+      options: [
+        { key: "give", label: "Give him the samosa and go" },
+        { key: "keep", label: "Keep the samosa, cancel the ride" },
+      ],
+      fallback: "keep",
+      offer: { transport, destination: dest, fare: price, wait: spec.wait },
+    };
+    return;
+  }
+  if (shortBy > 0) {
+    if (spec.needsPhone) ctx.phoneCost -= BATTERY.appBooking - 1; // nothing booked: you only looked at the fare
     ctx.refused.push(
       `A ${spec.label} from ${short(s.location)} to ${short(dest)} costs ₹${price}. You have ${describeWallet(s)}: ₹${price - spendable(s)} short, even paying with both.`,
     );
@@ -540,6 +558,9 @@ function applyItem(s: GameState, a: Action, ctx: Ctx) {
       ctx.refused.push(`You don't have a ${item.label}.`);
     } else if (id === "umbrella") {
       ctx.facts.push(s.raining ? "You open the umbrella. It helps." : "You open the umbrella. It isn't raining. People stare.");
+    } else if (id === "samosa" && !/\beat|\bate\b|\bbite|\bfinish/i.test(a.note ?? "")) {
+      // Offering it to nobody in particular: nobody takes it, so it stays in the bag (it's the player's to trade).
+      ctx.facts.push("You hold out your cold samosa. Nobody here is taking it for anything right now, so it goes back in your bag.");
     } else {
       removeItem(s, id);
       s.flags.push(`used:${id}`);

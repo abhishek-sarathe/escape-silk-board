@@ -359,7 +359,7 @@ describe("cash and UPI", () => {
 describe("a fare you can't cover", () => {
   it("says what you have in both pots and exactly how much you're short", () => {
     // The real case: ₹495 bike taxi from Koramangala with ₹330 UPI + ₹120 cash = ₹450.
-    const s: GameState = { ...newGame(4), location: "koramangala", visited: ["silk_board", "koramangala"], cash: 120, upi: 330 };
+    const s: GameState = { ...newGame(4), location: "koramangala", visited: ["silk_board", "koramangala"], cash: 120, upi: 330, inventory: [] };
     const fare = fixedFare(4, "bike_taxi", "koramangala", "airport")!;
     const { state, outcome } = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "airport" }));
     if (fare > 450) {
@@ -368,5 +368,23 @@ describe("a fare you can't cover", () => {
     } else {
       expect(state.ride?.transport).toBe("bike_taxi"); // cash + UPI together cover it
     }
+  });
+
+  it("a bike taxi driver, like a conductor, asks for the samosa when you're a little short", () => {
+    const base: GameState = { ...newGame(4), location: "kr_puram", visited: ["silk_board", "kr_puram"] };
+    const fare = fixedFare(4, "bike_taxi", "kr_puram", "airport")!;
+    const s: GameState = { ...base, cash: 120, upi: fare - 120 - 20, inventory: ["samosa"] };
+    const asked = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "airport" }));
+    expect(asked.state.pending?.id).toBe("fare_samosa");
+    expect(asked.state.inventory).toContain("samosa");
+    const gave = resolveTurn(asked.state, act({ kind: "choose", choice: "give" })).state;
+    expect(gave.ride?.transport).toBe("bike_taxi");
+    expect(gave.inventory).not.toContain("samosa");
+  });
+
+  it("holding out the samosa with nobody asking keeps it in the bag", () => {
+    const s: GameState = { ...newGame(4), inventory: ["samosa"] };
+    const res = resolveTurn(s, act({ kind: "use_item", items: ["samosa"], note: "offer the samosa to the bike" }));
+    expect(res.state.inventory).toContain("samosa");
   });
 });

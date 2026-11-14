@@ -202,5 +202,5 @@ export interface Decision {
   /** What happens if the player does something else instead. */
   fallback: string;
   /** A ride that's waiting on this answer (the conductor's samosa offer): boarded only if the player says yes. */
-  offer?: { transport: Transport; destination: LocationId; line?: string; path?: LocationId[]; fare: number };
+  offer?: { transport: Transport; destination: LocationId; line?: string; path?: LocationId[]; fare: number; wait?: number };
 }

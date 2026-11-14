@@ -185,16 +185,24 @@ export const ENCOUNTERS: EncounterSpec[] = [
     offer: () => ({ prompt: "", options: [], fallback: "keep" }), // built by the engine (busHire), with the ride it's for
     resolve: (s, key, k) => {
       const offer = k.offer;
-      if (key !== "give" || !offer) return k.fact("You keep your samosa. The bus pulls away without you.");
+      const bus = Boolean(offer?.line);
+      const who = bus ? "conductor" : "driver";
+      if (key !== "give" || !offer) {
+        return k.fact(bus ? "You keep your samosa. The bus pulls away without you." : "You keep your samosa. The driver cancels and rides off.");
+      }
       const cover = 50;
       if (!s.inventory.includes("samosa") || spendable(s) + cover < offer.fare) {
-        return k.refuse(`The conductor shakes his head: it's ₹${offer.fare}, and you have ${describeWallet(s)}.`);
+        return k.refuse(`The ${who} shakes his head: it's ₹${offer.fare}, and you have ${describeWallet(s)}.`);
       }
       k.pay(spendable(s));
       s.inventory.splice(s.inventory.indexOf("samosa"), 1);
       s.flags.push("traded:samosa");
-      k.fact(`You hand over everything you have and your cold samosa. The conductor nods, satisfied, and you're on the ${offer.line ?? "bus"}.`);
-      k.board(offer.transport, offer.destination, 0, offer.path, offer.line);
+      k.fact(
+        bus
+          ? `You hand over everything you have and your cold samosa. The conductor nods, satisfied, and you're on the ${offer.line}.`
+          : `You hand over everything you have and your cold samosa. The driver tucks it away, satisfied, and you're off to ${short(offer.destination)}.`,
+      );
+      k.board(offer.transport, offer.destination, offer.wait ?? 0, offer.path, offer.line);
     },
   },
   {
