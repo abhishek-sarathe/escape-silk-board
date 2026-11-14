@@ -139,10 +139,22 @@ export default function Game() {
         <h1 className="whitespace-nowrap font-mono text-sm font-semibold uppercase tracking-[0.22em] text-paper">
           <span className="font-display text-base tracking-normal text-sodium">Escape Silk Board</span>
         </h1>
-        <p className="truncate font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
-          {record && record.played > 0
-            ? `Flights caught ${record.won}/${record.played}${record.best !== null ? ` · best ${record.best} min spare` : ""}`
-            : "Flight ES 940 · departs 9:40 PM"}
+        {/* Phones get the short form, so it never truncates to "FLIGHTS CAUGHT ..." */}
+        <p className="shrink-0 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.12em] text-muted sm:tracking-[0.18em]">
+          {record && record.played > 0 ? (
+            <>
+              <span className="sm:hidden">✈ {record.won}/{record.played} caught</span>
+              <span className="hidden sm:inline">
+                Flights caught {record.won}/{record.played}
+                {record.best !== null ? ` · best ${record.best} min spare` : ""}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="sm:hidden">ES 940 · 9:40 PM</span>
+              <span className="hidden sm:inline">Flight ES 940 · departs 9:40 PM</span>
+            </>
+          )}
         </p>
       </header>
       <div aria-hidden className="hazard relative z-10 mx-auto mt-2 w-[calc(100%-2rem)] max-w-2xl lg:max-w-[62rem]" />
