@@ -7,8 +7,10 @@ describe("planned next moves (route planner, no AI)", () => {
   it("offers real first steps toward the airport from Silk Board", () => {
     const moves = nextMoves(newGame(4242))!;
     expect(moves.length).toBeGreaterThan(0);
-    expect(moves.length).toBeLessThanOrEqual(3);
-    for (const m of moves) expect(m).toMatch(/^(Take the|Book a|Find an auto|Walk to)/);
+    expect(moves.length).toBeLessThanOrEqual(2);
+    for (const m of moves) expect(m).toMatch(/^(Catch a bus towards|Book a|Haggle with an auto|Walk to)/);
+    for (const m of moves) expect(m).not.toMatch(/\d/); // a nudge: no route numbers, no fares
+    expect(moves.filter((m) => m.startsWith("Catch a bus")).length).toBeLessThanOrEqual(1); // one per kind of ride
   });
 
   it("stays out of the way during a ride, a haggle or a decision", () => {

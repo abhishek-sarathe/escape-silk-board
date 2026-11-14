@@ -3,34 +3,35 @@
 // Each turn shows the most useful move first, then a few drawn from a bigger pool. The draw is seeded
 // by game and turn, so the buttons stay put while you read, and change when the turn does.
 import { spendable } from "@/game/money";
-import type { LocationId } from "@/game/types";
 import type { PublicState } from "@/game/view";
 
-/** Real BMTC moves worth suggesting from each place (see busData.json; the engine checks them anyway). */
-const BUS_MOVES: Partial<Record<LocationId, string[]>> = {
-  silk_board: ["Take the 500-D bus to Hennur", "Take the V-500D AC bus to Hebbal", "Take the KIA-8 straight to the airport"],
-  hsr: ["Take the 500-D to Hennur", "Take the KIA-8 to the airport"],
-  koramangala: ["Take the KIA-7A to the airport", "Take a BMTC bus to MG Road"],
-  marathahalli: ["Take the 500-D to Hennur", "Take the KIA-8 to the airport"],
-  mg_road: ["Take the KIA-14 to the airport", "Take a BMTC bus to Hennur"],
-  kr_puram: ["Take the 500-D to Hennur", "Take the KIA-8 to the airport", "Take a bus to Hoskote"],
-  hennur: ["Take the ₹40 293-AP bus to the airport", "Take the KIA-8 to the airport"],
-  hebbal: ["Take the ₹40 281-AP bus to the airport", "Take the KIA-9 to the airport"],
-  yelahanka: ["Take the 281-AP bus to the airport", "Take the KIA-9 to the airport"],
-  hoskote: ["Haggle an auto to the airport, no toll on this side", "Find an auto to the airport"],
-};
+/**
+ * Ways to move that a local might try, with no route numbers: the buttons nudge, they don't solve the
+ * evening. (Buses are real and good; the player finds which one by asking or looking.)
+ */
+const MOVE_IDEAS = [
+  "Find a bus heading north",
+  "Haggle with an auto to Hebbal",
+  "Find an auto to the airport",
+  "Ask a local the quickest way out",
+  "Look for a shared auto",
+  "Walk a bit and find a better spot",
+  "Wave down any bus going north",
+];
 
 const ASK = [
   "What's the cheapest way to the airport from here?",
   "What's the fastest way to the airport from here?",
   "Which buses go from here?",
+  "Is there a shortcut from here?",
   "How much would a cab to the airport cost?",
 ];
 
 const FLAVOUR = [
   "Buy a chai and think about my life",
   "Ask a stranger for directions",
-  "Look for the Vayu Vajra bus stop",
+  "Look for the airport bus stop",
+  "Ask the chaiwala which way is fastest",
   "Check the traffic on my phone",
 ];
 
@@ -102,28 +103,27 @@ export function suggest(s: PublicState, more = 3): string[] {
     );
   }
 
-  const buses = BUS_MOVES[s.location] ?? [];
   const apps = phone
     ? ["Book a bike taxi to Hebbal", "Book a bike taxi to Hennur", "Check cab prices to the airport"].filter(
         (m) => !m.toLowerCase().endsWith(`to ${s.location}`), // never "to Hennur" while standing at Hennur
       )
     : [];
-  if (s.turn === 0) return pick(["bhaiya, airport chaloge? meter se."], [...buses, ...apps, ...ASK, "Buy a chai and think about my life"], more, seed);
+  if (s.turn === 0) return pick(["bhaiya, airport chaloge? meter se."], [...MOVE_IDEAS, ...apps, ...ASK, "Buy a chai and think about my life"], more, seed);
 
-  // The most useful next step first: a real bus from here, else an auto.
-  const first = buses.length ? [buses[0]] : ["Find an auto to the airport"];
-  return pick(first, [...needs, ...buses, ...apps, ...ASK, ...FLAVOUR, "Find an auto to the airport"], more, seed);
+  // No fixed "best move": urgent needs first (low battery, rain), then a seeded mix of ways to move,
+  // questions and local colour, so every kind of ride gets its turn on the buttons.
+  return pick(needs.slice(0, 1), [...needs.slice(1), ...MOVE_IDEAS, ...apps, ...ASK, ...FLAVOUR], more, seed);
 }
 
 /**
- * The buttons for a turn: up to two real next steps from the server's route planner first, then local
+ * The buttons for a turn: one hint from the server's route planner first (a kind of ride and a direction), then
  * ideas, skipping anything shown last turn so the row changes as the evening does. Falls back to repeats
  * only when there is nothing new to offer.
  */
 export function mixMoves(planned: string[], local: string[], lastShown: string[], size = 4): string[] {
   const seen = new Set(lastShown);
   const fresh = (m: string) => !seen.has(m);
-  const fromPlan = planned.filter(fresh).slice(0, 2);
+  const fromPlan = planned.filter(fresh).slice(0, 1);
   if (!fromPlan.length && planned.length) fromPlan.push(planned[0]); // the best real move stays on offer
   const out = [...fromPlan];
   for (const m of [...local.filter(fresh), ...local]) {

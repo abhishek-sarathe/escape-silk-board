@@ -227,28 +227,34 @@ function planTrip(s: GameState, to: LocationId, prefer: "cheapest" | "fastest") 
 }
 
 /** A trip's first step, phrased as something the player could type. */
-function moveFor(leg: Leg): string {
+type Family = "bus" | "app" | "auto" | "walk";
+
+/** A trip's first step as a nudge, not an answer: the kind of ride and the direction, no route number or fare. */
+function moveFor(leg: Leg): { family: Family; text: string } {
   const to = place(leg.to);
-  if (leg.how === "walk") return `Walk to ${to}`;
-  if (leg.how.startsWith("auto")) return `Find an auto to ${to}`;
-  if (leg.how === TRANSPORT.bike_taxi.label || leg.how === TRANSPORT.cab.label) return `Book a ${leg.how} to ${to} (₹${leg.fare})`;
-  const route = leg.how.split(" (")[0]; // "500-D (BMTC bus)" -> "500-D"
-  return `Take the ${route} to ${to} (₹${leg.fare})`;
+  if (leg.how === "walk") return { family: "walk", text: `Walk to ${to}` };
+  if (leg.how.startsWith("auto")) return { family: "auto", text: `Haggle with an auto to ${to}` };
+  if (leg.how === TRANSPORT.bike_taxi.label || leg.how === TRANSPORT.cab.label) return { family: "app", text: `Book a ${leg.how} to ${to}` };
+  return { family: "bus", text: `Catch a bus towards ${to}` };
 }
 
 /**
- * Up to three useful next moves for a player standing somewhere (no ride, no decision, no haggle):
- * the first step of the cheapest and fastest trips to the airport that still make check-in, plus the
- * best trip that doesn't. Plain code over the real data: no AI, no cost, and always true.
+ * Up to two hints for a player standing somewhere (no ride, no decision, no haggle): the first steps of
+ * good trips to the airport, one per kind of ride (so buses can't fill the row), phrased without route
+ * numbers or fares, so the player still has to look, ask or haggle. Plain code over the real data.
  */
 export function nextMoves(s: GameState): string[] | undefined {
   if (s.status !== "playing" || s.pending || s.ride || s.quote || s.location === "airport") return undefined;
-  const moves: string[] = [];
-  for (const prefer of ["cheapest", "fastest"] as const) {
-    for (const trip of bestTrips(s, "airport", prefer).slice(0, 2)) moves.push(moveFor(trip.legs[0]));
+  const byFamily = new Map<Family, string>();
+  for (const prefer of ["fastest", "cheapest"] as const) {
+    for (const trip of bestTrips(s, "airport", prefer)) {
+      const m = moveFor(trip.legs[0]);
+      if (!byFamily.has(m.family)) byFamily.set(m.family, m.text);
+    }
   }
-  const unique = [...new Set(moves)];
-  return unique.length ? unique.slice(0, 3) : undefined;
+  // Lead with whatever isn't a bus when there is one: buses are reliable, the rest is where the stories are.
+  const ordered = [...byFamily.entries()].sort(([a], [b]) => Number(a === "bus") - Number(b === "bus")).map(([, t]) => t);
+  return ordered.length ? ordered.slice(0, 2) : undefined;
 }
 
 const asPlace = (v: unknown): LocationId | undefined =>
