@@ -122,7 +122,7 @@ python -I scripts/build-bus-data.py bmtc.zip src/game/map.ts src/game/busData.js
 - **Backup (Groq free tier):** `qwen/qwen3.8-27b` narrates, `openai/gpt-oss-120b` referees and `openai/gpt-oss-20b` runs the agent. Each model has its own rate limit, so splitting them stretches the free budget.
 - **Calls per turn:** one to four agent steps (most turns take one or two), then one narrator call. If every provider fails, a keyword parser and plain narration keep the game running.
 - **Caching:** the system prompt, and inside an agent turn the game context, are marked for caching on Claude models. In testing, 77–91% of prompt tokens came from cache.
-- **Cost:** about $0.0003 a turn, so a 10-turn game costs about $0.003. The footer shows tokens used this playthrough, plus the real USD cost when OpenRouter answers.
+- **Cost:** measured over about 50 turns of real play, a turn (one agent call plus one narrator call) costs about $0.0004, so a 10-turn game costs about **$0.004** (well under ₹1); the first turn of a game costs a little more, before the cache warms up. Production costs are logged per call (see Cost tracking).
 
 ### Cost tracking
 
