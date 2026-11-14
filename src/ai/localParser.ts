@@ -1,6 +1,7 @@
 // Keyword parser used when every LLM provider is down (or no key is set).
 // Cruder than the LLM, but the game never stops working.
 import { normaliseLine } from "@/game/buses";
+import { askedForGone } from "@/game/gone";
 import { findPlace } from "@/game/map";
 import type { Action, GameState, ItemId } from "@/game/types";
 
@@ -48,6 +49,9 @@ export function parseLocally(state: GameState, input: string): Action {
   const destination = findPlace(t);
 
   if (has(/\b(give up|go home|quit|forget it)\b/)) return { ...base, kind: "give_up" };
+  // Bounce, Vogo, Yulu, the metro: not options tonight; the engine tells the real story (see game/gone.ts).
+  const gone = askedForGone(t);
+  if (gone && !has(/\b(rapido|uber|ola|auto|cab|taxi|bus|bmtc)\b/)) return { ...base, kind: "other", note: `look for a ${gone.id}` };
   // A decision is waiting: a number ("2") or the option's own words pick it.
   if (state.pending) {
     const opts = state.pending.options;

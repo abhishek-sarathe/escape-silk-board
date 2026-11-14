@@ -81,6 +81,8 @@ Eleven real places and three ways north: the Outer Ring Road (HSR, Marathahalli,
 - **7 PM drive times** are empty-road times multiplied by a traffic factor per kind of road. TomTom's 2025 index puts Bengaluru's evening rush at ×2.15. At that, almost nobody makes check-in, so the factors are tuned down until scripted players win a little over half the time (about 52%; first-time players win less) (`src/game/balance.ts`, enforced by `balance.test.ts`).
 - **Buses** get the real Outer Ring Road bus priority lane between Silk Board and KR Puram.
 
+- **Rides that aren't an option tonight** get the real story instead of being turned into something else (`src/game/gone.ts`): Bounce stopped renting scooters in 2023, Vogo faded away, a Yulu tops out at 25 km/h, and the Yellow Line metro at Silk Board runs the wrong way, to Electronic City. The narrator also knows this kind of Bengaluru texture (Namma Yatri, surge at 7 PM, peak-Bengaluru moments) and uses it as colour, never as new facts.
+
 The rules' numbers are in `src/game/rules.ts`.
 
 ### The city asks you things

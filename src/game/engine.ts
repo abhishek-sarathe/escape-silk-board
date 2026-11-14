@@ -4,6 +4,7 @@ import { deadlineOf, formatClock } from "./clock";
 import { BUS_TYPES, busLink, busOptions, busSpeed, isBus, lineFrom, type BusLine, type BusType, type LineStop } from "./buses";
 import { ENCOUNTERS, FRIEND, findEncounter, type Kit } from "./encounters";
 import { PLACES, edgeBetween, kmToAirport, neighbors, pathKm, route, tollOn } from "./map";
+import { askedForGone } from "./gone";
 import { describeWallet, payFrom, spendable, totalMoney, type PayBy } from "./money";
 import { between, rngFor, type Rng } from "./rng";
 import {
@@ -872,10 +873,18 @@ export function resolveTurn(prev: GameState, action: Action, opts: { oneStop?: b
       if (!s.ride) ctx.facts.push(`You wait ${minutes} minutes at ${short(s.location)}.`);
       break;
     }
-    case "other":
+    case "other": {
+      // Asking for something that isn't an option tonight (Bounce, Vogo, Yulu, the metro) gets the real story.
+      const gone = askedForGone(action.note);
+      if (gone) {
+        ctx.actionMinutes += gone.minutes;
+        ctx.facts.push(gone.fact);
+        break;
+      }
       ctx.actionMinutes += clamp(Math.round(action.minutes ?? 4), 1, 10);
       ctx.facts.push(`You ${action.note || "do that"}. It doesn't change your situation.`);
       break;
+    }
     case "impossible":
       ctx.actionMinutes += 2;
       ctx.refused.push(`That can't happen: ${action.note || "the city doesn't work that way"}.`);

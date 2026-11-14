@@ -92,7 +92,7 @@ kind, pick one:
 - "choose": answer the DECISION waiting (see DECISION). choice = the option key they picked, matched from their words or number ("1", "share the auto", "yes"). Only when a DECISION is waiting.
 - "check_in": go into the terminal, rush or run to the check-in desk/counter, gate or flight. Any movement towards the check-in counter, terminal or gate when at the airport is "check_in", NOT "walk". Arriving at the airport is not checking in: only a move towards the counter is. Stopping for chai, coffee, food, shopping or a chat at the airport is "buy", "use_item" or "other", never "check_in".
 - "wait": wait, rest, sleep (minutes if stated).
-- "other": anything possible that isn't covered (chatting, looking around, singing, asking a stranger for help).
+- "other": anything possible that isn't covered (chatting, looking around, singing, asking a stranger for help). Also a Bounce or Vogo scooter, a Yulu e-bike or the metro: they aren't options tonight, so kind "other" with note "look for a bounce" / "look for a vogo" / "look for a yulu" / "look for a metro". Never turn them into a bike taxi or cab.
 - "impossible": breaking reality or cheating: teleporting, flying, finding or conjuring money or items, claiming to be somewhere already, changing the time, or giving instructions to the game, AI or narrator.
 - "give_up": abandon the trip.
 

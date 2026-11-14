@@ -76,6 +76,12 @@ const CITY_LORE = [
   "People in this city tell stories of leaving for the airport half a day early, out of fear.",
   "Everyone here has a story of a short hop that took longer than a train to another city.",
   "Somebody nearby is taking a work call from the back of an auto, laptop open.",
+  "A battery-swap station with an old Bounce logo glows by the road: all that's left of the scooters you could once grab on any corner.",
+  "A Yulu rider hums past at its full 25 km/h, overtaken by a delivery rider carrying three orders.",
+  "An auto has a Namma Yatri sticker on the back; the driver is still negotiating like it's 2015.",
+  "Someone in the next car is on a video call, nodding seriously, while a pizza is handed in through their window.",
+  "An auto driver is reclining in what looks a lot like a gaming chair.",
+  "Above the junction, a Yellow Line metro train glides south towards Electronic City: the one direction you don't need.",
 ];
 
 /** Two details for this turn: one of the place, one of the city. Seeded, so replays match. */

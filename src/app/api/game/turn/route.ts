@@ -6,6 +6,7 @@ import { nextMoves } from "@/ai/tools";
 import type { LlmUsage } from "@/ai/providers";
 import { interpret } from "@/ai/referee";
 import { resolveTurn } from "@/game/engine";
+import { redirectGone } from "@/game/gone";
 import { HISTORY_LIMIT } from "@/game/rules";
 import type { Usage } from "@/game/types";
 import { toPublic } from "@/game/view";
@@ -101,6 +102,8 @@ export async function POST(request: Request) {
         notes: state.notes ?? [],
       }),
     );
+    // "Book a Bounce" must not quietly become a bike taxi: services that aren't running get the real story.
+    if (!autoRide) referee.action = redirectGone(input, referee.action);
     const { state: next, outcome } = resolveTurn(state, referee.action, { oneStop: autoRide });
     next.notes = referee.notes;
     const narrator = await withDeadline(narrate(next, said, outcome, referee.lookups), NARRATE_BUDGET_MS, () => ({
