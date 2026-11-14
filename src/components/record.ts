@@ -34,3 +34,26 @@ export function saveResult(won: boolean, spare: number): PlayerRecord {
   }
   return next;
 }
+
+// What the city threw at this player recently (event ids like "chai", "decision:race"), so the next new
+// evening can steer away from them. Browser-only, like the record.
+const SEEN_KEY = "escape-silk-board:seen-happenings";
+const SEEN_LIMIT = 10;
+
+export function readSeen(): string[] {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(SEEN_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, SEEN_LIMIT) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberSeen(id: string) {
+  const next = [id, ...readSeen().filter((x) => x !== id)].slice(0, SEEN_LIMIT);
+  try {
+    window.localStorage.setItem(SEEN_KEY, JSON.stringify(next));
+  } catch {
+    // storage blocked: no memory across evenings
+  }
+}

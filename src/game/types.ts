@@ -133,6 +133,8 @@ export interface GameState {
   meet?: { place: LocationId; by: number } | null;
   /** The Game Master agent's own short notes about this player (server-side only, never sent to the browser). */
   notes?: string[];
+  /** City happenings this player saw in recent evenings (sent by their browser): picked less often tonight. */
+  avoid?: string[];
   /** Minutes the airline counter agreed to stay open past 8:55 for you (the staff call at the airport). */
   grace?: number;
   /** Every stretch travelled, in order, and how: the live route map draws the evening from this. */

@@ -634,7 +634,92 @@ const EVENTS: EventSpec[] = [
     text: "A stranger stuck in the same jam hands you a cutting chai. Solidarity.",
     canHappen: (s) => s.inventory.length < MAX_INVENTORY,
     apply: (s) => {
-      s.inventory.push("chai");
+      const [text, item] = variant(s, "gift", [
+        ["A stranger stuck in the same jam hands you a cutting chai through the window. Solidarity.", "chai"],
+        ["An auntie in the next car sees your face and passes you a water bottle. \"Drink, you look stressed.\"", "water"],
+        ["A delivery rider with a spare order shrugs and hands you a filter coffee. \"Cancelled. Take.\"", "coffee"],
+      ] as const);
+      s.inventory.push(item);
+      return text;
+    },
+  },
+  // More of the city, so two evenings rarely feel alike. Each happens at most once per game.
+  {
+    id: "pothole",
+    text: "Your ride drops into a pothole the size of a bathtub. Your next stretch by road will be 4 minutes slower.",
+    canHappen: (s) => s.ride !== null && s.ride.transport !== "lift",
+    apply: (s) => {
+      s.pendingDelay += 4;
+      s.pendingDelayReason = "the pothole";
+    },
+  },
+  {
+    id: "signal",
+    text: "The signal ahead dies. One constable takes over with a whistle and pure confidence.",
+    canHappen: () => true,
+    apply: (s) => {
+      const fast = rngFor(s.seed, s.turn, "signal")() < 0.5;
+      s.pendingDelay += fast ? -5 : 6;
+      s.pendingDelayReason = fast ? "the constable's whistle" : "the dead signal";
+      return fast
+        ? "The signal ahead dies, and a lone constable with a whistle does better than the lights ever did. Your next stretch by road will be 5 minutes faster."
+        : "The signal ahead dies. Everyone decides they have right of way. Your next stretch by road will be 6 minutes slower.";
+    },
+  },
+  {
+    id: "tanker",
+    text: "A water tanker reverses into the road, very slowly, guided by a man shouting \"Bha! Bha! Bha!\". Your next stretch by road will be 7 minutes slower.",
+    canHappen: () => true,
+    apply: (s) => {
+      s.pendingDelay += 7;
+      s.pendingDelayReason = "the water tanker";
+    },
+  },
+  {
+    id: "cricket",
+    text: "An RCB match has just ended at Chinnaswamy, and the whole city is driving home singing. Your next stretch by road will be 10 minutes slower.",
+    canHappen: (s) => ["koramangala", "mg_road", "hebbal"].includes(s.location),
+    apply: (s) => {
+      s.pendingDelay += 10;
+      s.pendingDelayReason = "the RCB crowd";
+    },
+  },
+  {
+    id: "ambulance",
+    text: "An ambulance threads through the jam and your driver slips in right behind it. Your next stretch by road will be 5 minutes faster.",
+    canHappen: (s) => s.ride !== null && ["auto", "cab", "bike_taxi"].includes(s.ride.transport) && s.pendingDelay === 0,
+    apply: (s) => {
+      s.pendingDelay -= 5;
+      s.pendingDelayReason = "following the ambulance";
+    },
+  },
+  {
+    id: "maps_reroute",
+    text: "The driver's phone announces a faster route. He takes it.",
+    canHappen: (s) => s.ride !== null && ["auto", "cab", "bike_taxi"].includes(s.ride.transport),
+    apply: (s) => {
+      const good = rngFor(s.seed, s.turn, "reroute")() < 0.45;
+      s.pendingDelay += good ? -6 : 7;
+      s.pendingDelayReason = good ? "the reroute" : "the 'faster' route";
+      return good
+        ? "The driver's maps app finds a back road and, for once, it's right. Your next stretch by road will be 6 minutes faster."
+        : "The driver's maps app promises a faster route, through a lane where everyone else had the same idea. Your next stretch by road will be 7 minutes slower.";
+    },
+  },
+  {
+    id: "power_bank",
+    text: "The student next to you notices your battery icon and wordlessly plugs you into her power bank. +6% battery.",
+    canHappen: (s) => s.battery > 0 && s.battery < 40,
+    apply: (s) => {
+      s.battery = Math.min(100, s.battery + 6);
+    },
+  },
+  {
+    id: "found_money",
+    text: "A folded ₹20 note blows against your shoe. Nobody around claims it. The city giveth.",
+    canHappen: (s) => !s.ride,
+    apply: (s) => {
+      s.cash += 20;
     },
   },
 ];
@@ -660,7 +745,14 @@ function rollEvent(s: GameState, stop = 0): CityEvent | null {
     ...ENCOUNTERS.filter((d) => !s.flags.includes(`decision:${d.id}`) && d.canHappen(s)).map((d) => ({ kind: "decision" as const, d })),
   ];
   if (!pool.length) return null;
-  const pick = pool[Math.floor(rng() * pool.length)];
+  // What this player saw in their last few evenings comes up far less often, so replays feel new.
+  const avoid = new Set(s.avoid ?? []);
+  const idOf = (p: (typeof pool)[number]) => (p.kind === "event" ? p.e.id : `decision:${p.d.id}`);
+  const weights = pool.map((p) => (avoid.has(idOf(p)) ? 0.15 : 1));
+  let r = rng() * weights.reduce((a, b) => a + b, 0);
+  let index = 0;
+  while (index < pool.length - 1 && r >= weights[index]) r -= weights[index++];
+  const pick = pool[index];
   const pin = (e: CityEvent) => {
     s.marks = [...(s.marks ?? []), { place: s.location, minutes: s.minutes, id: e.id, text: e.text }];
     return e;

@@ -9,7 +9,7 @@ import Backdrop from "./Backdrop";
 import EndCard from "./EndCard";
 import Feed, { type Entry } from "./Feed";
 import Hud from "./Hud";
-import { readRecord, saveResult, type PlayerRecord } from "./record";
+import { readRecord, readSeen, rememberSeen, saveResult, type PlayerRecord } from "./record";
 import { mixMoves, suggest } from "./suggestions";
 
 /** Seconds of quiet during a ride before it moves on by itself. */
@@ -40,7 +40,7 @@ export default function Game() {
   const begin = useCallback(async (seed?: number) => {
     setBusy(true);
     try {
-      const data = await startGame(seed);
+      const data = await startGame(seed, seed === undefined ? readSeen() : []);
       setState(data.state);
       setToken(data.token);
       setDelta(null);
@@ -88,6 +88,7 @@ export default function Game() {
       setState(data.state);
       setToken(data.token);
       setDelta(data.outcome.delta);
+      if (data.outcome.event) rememberSeen(data.outcome.event.id);
       if (data.state.status !== "playing") {
         setRecord(saveResult(data.state.status === "won", CHECKIN_CLOSES + (data.state.grace ?? 0) - data.state.minutes));
         setShowEnd(true);
