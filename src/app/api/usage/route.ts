@@ -11,5 +11,5 @@ export async function GET(request: Request) {
   if (process.env.NODE_ENV === "production" && (!key || new URL(request.url).searchParams.get("key") !== key)) {
     return new Response("Not found", { status: 404 });
   }
-  return Response.json(usageSummary());
+  return Response.json(await usageSummary());
 }

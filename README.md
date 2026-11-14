@@ -124,13 +124,12 @@ python -I scripts/build-bus-data.py bmtc.zip src/game/map.ts src/game/busData.js
 
 ### Cost tracking
 
-Every LLM call, success or failure, is logged to SQLite (`.data/llm-calls.sqlite`, via Node's built-in `node:sqlite`). Each row records the game, turn, role, provider, model, latency, prompt, cached and output tokens, and the cost OpenRouter reports. Prompts and player text are not stored.
+Every LLM call, success or failure, is metered (`src/server/llmLog.ts`): game, turn, role, provider, model, latency, prompt, cached and output tokens, and the cost OpenRouter reports. Prompts and player text are never stored.
 
-- `npm run usage` prints totals, a breakdown by role and model, and the last games.
+- **Production: Supabase.** With `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set, a turn's rows are queued and written to the `llm_calls` table after the response has gone out (Next's `after()`), so logging never slows a turn, and a failed write never breaks one. Create the table, indexes and summary function once by running [`supabase/llm_calls.sql`](supabase/llm_calls.sql) in the Supabase SQL editor. Row level security is on with no policies: only the server's service-role key can read or write.
+- **Local development: SQLite** (`.data/llm-calls.sqlite`, Node's built-in `node:sqlite`) when Supabase isn't configured. Without Supabase on Vercel, it falls back to a temporary file per server instance.
+- `npm run usage` prints totals, a breakdown by role and model, and the last games. It reads Supabase when `.env.local` has the two Supabase settings, otherwise the local SQLite file.
 - `GET /api/usage` returns the same as JSON. It's open in development; in production it needs `?key=<USAGE_KEY>`.
-
-On Vercel the log writes to the function's temporary disk. It works, but each server instance keeps its own copy and loses it when the instance is recycled or the app is redeployed, so `/api/usage` shows recent calls, not all-time totals. For durable production metering, point `src/server/llmLog.ts` at a hosted database; nothing else has to change. If the log can't be written, it switches itself off and turns carry on normally.
-
 ## Deploy (Vercel)
 
 1. Import the GitHub repo in Vercel (or run `vercel` in the project folder). The framework is detected as Next.js; no build settings are needed.
@@ -147,6 +146,8 @@ On Vercel the log writes to the function's temporary disk. It works, but each se
    | `STATE_SECRET` | a long random string. **Required:** without it, new games fail in production |
    | `LLM_TIMEOUT_MS` | `12000` |
    | `USAGE_KEY` | optional, a random string for `/api/usage?key=...` |
+   | `SUPABASE_URL` | your Supabase project URL (for the cost log) |
+   | `SUPABASE_SERVICE_ROLE_KEY` | the project's service-role key. **Server only:** never a `NEXT_PUBLIC_` variable |
 
 3. Deploy. The turn route allows up to 60 seconds (`maxDuration`), which covers a slow agent turn with provider fallback.
 

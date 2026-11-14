@@ -9,7 +9,8 @@ import { resolveTurn } from "@/game/engine";
 import { HISTORY_LIMIT } from "@/game/rules";
 import type { Usage } from "@/game/types";
 import { toPublic } from "@/game/view";
-import { withTurn } from "@/server/llmLog";
+import { after } from "next/server";
+import { flushTurn, withTurn, type TurnContext } from "@/server/llmLog";
 import { openState, sealState } from "@/server/stateToken";
 
 // The agent can take up to 4 model steps, each with a 12 s timeout and a second provider to fall
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
 
   // REFEREE_MODE=classic uses the single-call referee; the default is the tool-using Game Master agent.
   // Every LLM call inside is metered against this game and turn (src/server/llmLog.ts).
-  const meter = { gameId: state.id ?? `seed-${state.seed}`, seed: state.seed, turn: state.turn + 1 };
+  const meter: TurnContext = { gameId: state.id ?? `seed-${state.seed}`, seed: state.seed, turn: state.turn + 1 };
   // Time budgets keep a turn from hanging when a provider is slow: past them the game answers anyway,
   // with the keyword parser for the move and plain sentences for the story. Totals stay well under maxDuration.
   // The automatic ride only ever means "ride on", and only while riding with nothing to decide.
@@ -110,6 +111,9 @@ export async function POST(request: Request) {
     }));
     return { referee, next, outcome, narrator };
   });
+
+  // Write this turn's cost rows after the response has gone out (Supabase in production; no-op otherwise).
+  after(() => flushTurn(meter));
 
   next.history = [...next.history, { input: said, narration: narrator.text }].slice(-HISTORY_LIMIT);
   next.usage = addUsage(next.usage, referee.usage, narrator.usage);

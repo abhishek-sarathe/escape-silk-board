@@ -1,16 +1,21 @@
 // Metering for every LLM call: who called which model, for which game and turn, how long it took,
-// how many tokens (and how many came from cache), and what it cost. One SQLite file, using Node's
-// built-in node:sqlite (no dependency). No prompts or player text are stored: this is a meter, not
-// a transcript.
+// how many tokens (and how many came from cache), and what it cost. No prompts or player text are
+// stored: this is a meter, not a transcript.
 //
-// Local dev: .data/llm-calls.sqlite (override with LLM_LOG_DB). On serverless hosts the disk is
-// temporary, so point this module at a hosted database (Turso/libSQL, Postgres) for production:
-// only this file needs to change.
+// Two backends, same columns:
+//  - Supabase (production): when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set. A turn's rows are
+//    queued in memory and written after the response is sent (the turn route calls flushTurn() inside
+//    Next's after()), so logging never slows or breaks a turn. Table and summary function:
+//    supabase/llm_calls.sql.
+//  - SQLite (local dev): .data/llm-calls.sqlite via Node's built-in node:sqlite (override with
+//    LLM_LOG_DB; on Vercel without Supabase, the function's temp dir, per instance).
+// LLM_LOG=off turns both off.
 import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { createClient } from "@supabase/supabase-js";
 
 export interface CallRecord {
   role: string;
@@ -25,25 +30,93 @@ export interface CallRecord {
   costUsd: number;
 }
 
-/** Which game and turn the LLM calls in this request belong to. */
-interface TurnContext {
+/** Which game and turn the LLM calls in this request belong to, and the rows waiting to be written. */
+export interface TurnContext {
   gameId: string;
   seed: number;
   turn: number;
+  /** Supabase rows for this turn, written by flushTurn(). */
+  queue?: LogRow[];
+  /** After the flush, late calls (a provider answering after the turn's time budget) write straight away. */
+  flushed?: boolean;
+}
+
+/** One row of llm_calls, as both backends store it. */
+export interface LogRow {
+  game_id: string | null;
+  seed: number | null;
+  turn: number | null;
+  role: string;
+  provider: string;
+  model: string;
+  ok: boolean;
+  error: string | null;
+  latency_ms: number;
+  prompt_tokens: number;
+  cached_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+}
+
+/** The slice of the Supabase client this module uses (so tests can pass a fake). */
+export interface LogClient {
+  from(table: string): { insert(rows: LogRow[]): PromiseLike<{ error: { message: string } | null }> };
+  rpc(fn: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }>;
 }
 
 const context = new AsyncLocalStorage<TurnContext>();
+const off = () => process.env.LLM_LOG === "off";
 
 /** Run `fn` with every LLM call inside it attributed to this game and turn. */
 export function withTurn<T>(ctx: TurnContext, fn: () => Promise<T>): Promise<T> {
+  ctx.queue ??= [];
   return context.run(ctx, fn);
 }
+
+// ---------------------------------------------------------------------------
+// Supabase
+
+let client: LogClient | null | undefined;
+
+function remote(): LogClient | null {
+  if (client !== undefined) return client;
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  client = url && key ? (createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) as unknown as LogClient) : null;
+  return client;
+}
+
+/** For tests: use this client instead of a real one (null: no Supabase; undefined: read the env again). */
+export function setLogClientForTests(c: LogClient | null | undefined) {
+  client = c;
+}
+
+async function insertRows(rows: LogRow[]): Promise<void> {
+  const c = remote();
+  if (!c || !rows.length) return;
+  try {
+    const { error } = await c.from("llm_calls").insert(rows);
+    if (error) console.warn(`[llm log] supabase insert failed: ${error.message}`);
+  } catch (err) {
+    console.warn(`[llm log] supabase insert failed: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/** Write this turn's queued rows. Meant for Next's after(); never throws. */
+export async function flushTurn(ctx: TurnContext): Promise<void> {
+  ctx.flushed = true;
+  const rows = ctx.queue?.splice(0) ?? [];
+  await insertRows(rows);
+}
+
+// ---------------------------------------------------------------------------
+// SQLite
 
 let db: DatabaseSync | null | undefined;
 
 function open(): DatabaseSync | null {
   if (db !== undefined) return db;
-  if (process.env.LLM_LOG === "off") return (db = null);
+  if (off()) return (db = null);
   try {
     // Loaded at runtime, not through the bundler (Turbopack can't resolve node:sqlite), so a
     // runtime without it simply skips logging.
@@ -84,29 +157,56 @@ function open(): DatabaseSync | null {
   return db;
 }
 
+// ---------------------------------------------------------------------------
+
+function toRow(r: CallRecord, ctx: TurnContext | undefined): LogRow {
+  return {
+    game_id: ctx?.gameId ?? null,
+    seed: ctx?.seed ?? null,
+    turn: ctx?.turn ?? null,
+    role: r.role,
+    provider: r.provider,
+    model: r.model,
+    ok: r.ok,
+    error: r.error?.slice(0, 300) ?? null,
+    latency_ms: Math.round(r.latencyMs),
+    prompt_tokens: r.promptTokens,
+    cached_tokens: r.cachedTokens,
+    completion_tokens: r.completionTokens,
+    cost_usd: r.costUsd,
+  };
+}
+
 /** Record one call. Never throws: metering must not break a turn. */
 export function logCall(r: CallRecord): void {
   try {
+    if (off()) return;
+    const ctx = context.getStore();
+    const row = toRow(r, ctx);
+    if (remote()) {
+      if (ctx?.queue && !ctx.flushed) ctx.queue.push(row);
+      else void insertRows([row]);
+      return;
+    }
     const d = open();
     if (!d) return;
-    const ctx = context.getStore();
     d.prepare(
       `INSERT INTO llm_calls (game_id, seed, turn, role, provider, model, ok, error, latency_ms, prompt_tokens, cached_tokens, completion_tokens, cost_usd)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
-      ctx?.gameId ?? null,
-      ctx?.seed ?? null,
-      ctx?.turn ?? null,
-      r.role,
-      r.provider,
-      r.model,
-      r.ok ? 1 : 0,
-      r.error?.slice(0, 300) ?? null,
-      Math.round(r.latencyMs),
-      r.promptTokens,
-      r.cachedTokens,
-      r.completionTokens,
-      r.costUsd,
+      row.game_id,
+      row.seed,
+      row.turn,
+      row.role,
+      row.provider,
+      row.model,
+      row.ok ? 1 : 0,
+      row.error,
+      row.latency_ms,
+      row.prompt_tokens,
+      row.cached_tokens,
+      row.completion_tokens,
+      row.cost_usd,
     );
   } catch (err) {
     console.warn(`[llm log] write failed: ${err instanceof Error ? err.message : err}`);
@@ -118,11 +218,23 @@ const TOTALS = `COUNT(*) AS calls, SUM(1 - ok) AS failed, ROUND(SUM(cost_usd), 6
   ROUND(AVG(latency_ms)) AS avg_ms`;
 
 /** Totals overall, per model and role, per day, and the most recent games. */
-export function usageSummary(games = 20) {
+export async function usageSummary(games = 20): Promise<Record<string, unknown>> {
+  if (off()) return { enabled: false };
+  const c = remote();
+  if (c) {
+    try {
+      const { data, error } = await c.rpc("llm_usage_summary", { games });
+      if (error) return { enabled: true, backend: "supabase", error: error.message };
+      return { enabled: true, backend: "supabase", ...(data as Record<string, unknown>) };
+    } catch (err) {
+      return { enabled: true, backend: "supabase", error: err instanceof Error ? err.message : String(err) };
+    }
+  }
   const d = open();
   if (!d) return { enabled: false };
   return {
     enabled: true,
+    backend: process.env.VERCEL ? "sqlite (this server instance only)" : "sqlite",
     total: d.prepare(`SELECT ${TOTALS} FROM llm_calls`).get(),
     byModel: d.prepare(`SELECT role, provider, model, ${TOTALS} FROM llm_calls GROUP BY role, provider, model ORDER BY cost_usd DESC`).all(),
     byDay: d.prepare(`SELECT substr(at, 1, 10) AS day, ${TOTALS} FROM llm_calls GROUP BY day ORDER BY day DESC LIMIT 14`).all(),

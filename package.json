@@ -8,9 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node scripts/test.mjs",
-    "usage": "node --no-warnings scripts/usage.mjs"
+    "usage": "node --no-warnings --env-file-if-exists=.env.local scripts/usage.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
