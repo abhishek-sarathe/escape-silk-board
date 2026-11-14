@@ -119,7 +119,7 @@ export function context(s: GameState): string {
     `FRIEND WAITING: ${s.meet ? `at ${s.meet.place}` : "none"}`,
     `BAG: ${bag}`,
     `CATALOG: ${catalog}`,
-    `MONEY: ${describeWallet(s)}. App rides are paid by UPI only. BATTERY: ${s.battery}%.`,
+    `MONEY: ${describeWallet(s)}. App rides need a working phone to book; riders take cash or UPI. BATTERY: ${s.battery}%.`,
     `EARLIER TONIGHT (the player may refer back to any of this):\n${eveningSoFar(s)}`,
     `PLACES:\n${places}`,
   ].join("\n");

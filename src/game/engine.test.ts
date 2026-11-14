@@ -309,10 +309,14 @@ describe("cash and UPI", () => {
   });
   const kia = act({ kind: "hire", transport: "airport_bus", destination: "airport" });
 
-  it("app rides take UPI only: pocket cash can't pay for a bike taxi", () => {
-    const { state, outcome } = resolveTurn({ ...newGame(4), cash: 500, upi: 0 }, act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" }));
-    expect(state.ride).toBeNull();
-    expect(outcome.refused.join(" ")).toMatch(/UPI/);
+  it("app rides need a working phone to book, but the rider takes cash: UPI first, then cash", () => {
+    const fare = fixedFare(4, "bike_taxi", "silk_board", "hebbal")!;
+    const s = { ...newGame(4), cash: 500, upi: 20 };
+    const { state } = resolveTurn(s, act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" }));
+    expect(state.ride?.transport).toBe("bike_taxi");
+    expect(state).toMatchObject({ upi: 0, cash: 500 - (fare - 20) });
+    const dead = resolveTurn({ ...s, battery: 0 }, act({ kind: "hire", transport: "bike_taxi", destination: "hebbal" }));
+    expect(dead.state.ride).toBeNull(); // no phone, no app
   });
 
   it("a dead phone locks the UPI money: only cash pays", () => {

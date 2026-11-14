@@ -160,7 +160,7 @@ function quote(s: GameState, transport: Transport, to: LocationId, from: Locatio
     return { meter_estimate: meterFare("auto", pathKm(path)) + toll, note: "Drivers ask more than the meter; haggling needed.", toll, rough_minutes: minutes };
   }
   if (spec.needsPhone && s.battery <= 0) return { error: `Phone is dead: no ${spec.label}.` };
-  return { app_price: fixedFare(s.seed, transport, from, to), paid_by: "UPI only", upi_available: spendable(s, "upi"), toll, rough_minutes: minutes, needs_phone: spec.needsPhone };
+  return { app_price: fixedFare(s.seed, transport, from, to), paid_by: "cash or UPI (booking needs the phone)", money_available: spendable(s), toll, rough_minutes: minutes, needs_phone: spec.needsPhone };
 }
 
 interface Leg {
@@ -181,7 +181,6 @@ function legs(s: GameState, from: LocationId, to: LocationId): Leg[] {
     if (TRANSPORT[t].needsPhone && s.battery <= 0) continue;
     const path = route(from, to, t)!;
     const fare = t === "auto" ? meterFare("auto", pathKm(path)) + tollOn(path, t) : fixedFare(s.seed, t, from, to)!;
-    if (TRANSPORT[t].needsPhone && fare > spendable(s, "upi")) continue; // app rides are UPI only
     out.push({ how: t === "auto" ? "auto (meter estimate; expect to haggle)" : TRANSPORT[t].label, to, fare, minutes: TRANSPORT[t].wait + rideMinutes(path, t) });
   }
   const edge = edgeBetween(from, to);

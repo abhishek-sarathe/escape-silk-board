@@ -1,8 +1,9 @@
 // Two kinds of money, as the brief puts it: "UPI works while the phone lives".
 //   cash: notes in your pocket, always good;
 //   upi:  money in the bank, spendable only while the phone has charge.
-// App rides (cab, bike taxi) take UPI only. Everyone else takes either. When both work, UPI goes first,
-// like it does in real life, which is exactly what makes a dying phone frightening.
+// Every ride and shop takes either; app rides (cab, bike taxi) need a living phone to book, but the rider
+// takes cash too. When both work, UPI goes first, like it does in real life, which is exactly what makes a
+// dying phone frightening: the UPI money is locked the moment it dies.
 
 export interface Wallet {
   cash: number;

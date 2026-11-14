@@ -99,13 +99,12 @@ export function fixedFare(seed: number, transport: Transport, from: LocationId, 
   return Math.round(meterFare(transport, pathKm(path)) * surge(seed, transport)) + tollOn(path, transport);
 }
 
-/** Pay, UPI first while the phone works, then cash (app rides: UPI only). Callers check `spendable` first. */
+/** Pay, UPI first while the phone works, then cash. Callers check `spendable` first. */
 function pay(s: GameState, amount: number, by: PayBy = "any") {
   payFrom(s, amount, by);
 }
 
 /** How a transport is paid for: app rides through the app (UPI), the rest by cash or UPI. */
-const payBy = (t: Transport): PayBy => (TRANSPORT[t].needsPhone ? "upi" : "any");
 
 function removeItem(s: GameState, id: ItemId) {
   const i = s.inventory.indexOf(id);
@@ -216,14 +215,16 @@ function hire(s: GameState, a: Action, ctx: Ctx, rng: Rng) {
     return;
   }
   const price = fixedFare(s.seed, transport, s.location, dest)!;
-  if (price > spendable(s, payBy(transport))) {
+  // App rides need a living phone to book (checked above), but the rider takes cash or UPI, like Rapido,
+  // Uber and Ola do: UPI first while the phone works, then cash.
+  if (price > spendable(s)) {
     ctx.refused.push(
-      `A ${spec.label} from ${short(s.location)} to ${short(dest)} costs ₹${price}, paid in the app by UPI. You have ₹${spendable(s, "upi")} on UPI.`,
+      `A ${spec.label} from ${short(s.location)} to ${short(dest)} costs ₹${price}. You have ${describeWallet(s)}.`,
     );
     ctx.actionMinutes += 2;
     return;
   }
-  pay(s, price, payBy(transport));
+  pay(s, price);
   ctx.facts.push(`You book a ${spec.label} to ${short(dest)} for ₹${price}. It is "2 minutes away" for ${spec.wait} minutes.`);
   startRide(s, ctx, transport, dest, spec.wait);
 }
