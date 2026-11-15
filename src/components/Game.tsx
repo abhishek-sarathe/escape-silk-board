@@ -14,6 +14,8 @@ import { mixMoves, suggest } from "./suggestions";
 
 /** Seconds of quiet during a ride before it moves on by itself. */
 const AUTO_RIDE_SECONDS = 10;
+/** The final narration is the payoff; give it a few seconds on screen before the end card covers it. */
+const END_CARD_DELAY_MS = 6000;
 
 export default function Game() {
   const [state, setState] = useState<PublicState | null>(null);
@@ -91,7 +93,8 @@ export default function Game() {
       if (data.outcome.event) rememberSeen(data.outcome.event.id);
       if (data.state.status !== "playing") {
         setRecord(saveResult(data.state.status === "won", CHECKIN_CLOSES + (data.state.grace ?? 0) - data.state.minutes));
-        setShowEnd(true);
+        // Let the closing line land first: the card follows once there's been time to read it.
+        setTimeout(() => setShowEnd(true), END_CARD_DELAY_MS);
       }
       setEntries((prev) => [...prev, entry({ kind: "narrator", text: data.narration, at: data.state.minutes, outcome: data.outcome, trace: data.trace })]);
     } catch (err) {
