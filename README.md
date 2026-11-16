@@ -2,6 +2,8 @@
 
 It's 7:00 PM at Silk Board junction. Your flight leaves at 9:40 and check-in closes at 8:55. You have ₹120 in cash, ₹380 on UPI (only while your phone lives), 24% battery and one cold samosa. Type anything; the city answers.
 
+**▶ Play it: [escape-silk-board.vercel.app](https://escape-silk-board.vercel.app)** (made for phones, works on a laptop)
+
 ## Run it
 
 ```bash
